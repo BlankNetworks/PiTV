@@ -1,3 +1,13 @@
+# 0.2.2 PiTV release
+
+Prepared November 8, 2026.
+
+- The Pi installer now keeps the appliance awake: systemd idle action is `ignore`, all four sleep modes are disabled, and sleep targets are persistently masked. The next PiTV update applies this policy. Deliberate reboot and shutdown remain available.
+- No TV catalog or cleanup policy changes. Automatic cleanup remains off after updating.
+- This policy cannot prevent a power loss, thermal protection shutdown, or another privileged program from deliberately powering off the Pi.
+
+---
+
 # 0.2.1 PiTV release
 
 Prepared November 7, 2026.

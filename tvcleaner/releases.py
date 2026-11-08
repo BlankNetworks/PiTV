@@ -45,6 +45,7 @@ FINAL_UPDATES = {"completed", "rolled_back", "aborted"}
 REQUIRED_FILES = {
     "UPSTREAM.json", "LICENSE", "README.md", "scripts/install-pi.sh",
     "scripts/pitv-update.service", "scripts/pitv-update.path",
+    "scripts/pitv-logind.conf", "scripts/pitv-sleep.conf",
     "scripts/cli.py", "tvcleaner/__init__.py", "tvcleaner/__main__.py",
     "tvcleaner/service.py", "tvcleaner/transport.py", "tvcleaner/web.py",
     "tvcleaner/catalog.py", "tvcleaner/policy.py", "tvcleaner/storage.py", "tvcleaner/updates.py",

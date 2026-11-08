@@ -42,6 +42,8 @@ sudo bash scripts/install-pi.sh
 
 This installs Debian's native `adb`, Python and upstream Python dependencies; copies the project to `/opt/universal-tv-debloater`; creates the dedicated `tvcleaner` service account; and starts a systemd service on port 8080. Internet access is needed for this installation. The profiles and Python dependencies then remain local.
 
+The installer also configures the Pi to stay awake when idle. It disables systemd suspend and hibernation and masks their sleep targets. Normal manual reboot and shutdown still work. This cannot prevent a power failure or a deliberate shutdown by another privileged program.
+
 The generic installer prints an address on port 8080 and a legacy access token. This PiTV build does not ask for or require that token in either control page or API. On the configured PiTV appliance, open `http://pitv.local/` for the guided page or `http://pitv.local/advanced` for all controls. A fresh generic install opens:
 
 ```text

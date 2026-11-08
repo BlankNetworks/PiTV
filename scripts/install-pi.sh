@@ -78,6 +78,16 @@ chmod 0644 /etc/udev/rules.d/70-tvcleaner-adb.rules
 udevadm control --reload-rules
 install -o root -g root -m 0644 "$INSTALL_DIR/scripts/pitv-update.service" /etc/systemd/system/pitv-update.service
 install -o root -g root -m 0644 "$INSTALL_DIR/scripts/pitv-update.path" /etc/systemd/system/pitv-update.path
+# The PiTV appliance must remain reachable when idle. Keep explicit policy
+# drop-ins so later package updates do not restore default sleep behavior.
+install -d -m 0755 /etc/systemd/logind.conf.d /etc/systemd/sleep.conf.d
+install -o root -g root -m 0644 "$INSTALL_DIR/scripts/pitv-logind.conf" /etc/systemd/logind.conf.d/90-pitv-keep-awake.conf
+install -o root -g root -m 0644 "$INSTALL_DIR/scripts/pitv-sleep.conf" /etc/systemd/sleep.conf.d/90-pitv-keep-awake.conf
+# Masking the common sleep targets also blocks service-initiated suspend.
+systemctl mask sleep.target suspend.target hibernate.target hybrid-sleep.target suspend-then-hibernate.target
+if systemctl is-active --quiet systemd-logind.service; then
+  systemctl kill --signal=HUP --kill-whom=main systemd-logind.service
+fi
 cat > /etc/systemd/system/tvcleaner.service <<'UNIT'
 [Unit]
 Description=Universal TV Debloater local control page

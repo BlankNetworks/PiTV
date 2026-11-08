@@ -123,6 +123,22 @@ TV journal over newer TV data. Recipes and enrollments remain stored; the runtim
 still checks their source, profile, firmware and device-state constraints before
 any later unattended cleanup.
 
+Starting with PiTV v0.2.2, the installer also writes persistent systemd login
+and sleep drop-ins and masks the sleep targets so the Pi stays awake while idle.
+The installer signals logind to reload its configuration. Deliberate `reboot` and
+`poweroff` remain available. On the Pi, verify after updating with:
+
+```bash
+systemctl is-enabled sleep.target suspend.target hibernate.target hybrid-sleep.target suspend-then-hibernate.target
+cat /etc/systemd/logind.conf.d/90-pitv-keep-awake.conf
+cat /etc/systemd/sleep.conf.d/90-pitv-keep-awake.conf
+```
+
+All five targets should report `masked`. Updating the app cannot prevent power
+loss, thermal protection, or a separate privileged process from deliberately
+shutting down the Pi. If the application update fails after the installer applies
+these settings, application rollback does not remove the new power policy.
+
 ## Failed or interrupted updates
 
 If the installer or health checks fail, the updater stops the new service and
