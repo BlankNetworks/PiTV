@@ -145,13 +145,15 @@ def _write_managed(path, value):
             os.unlink(temporary)
 
 
-def _profile(identifier, unique_id, interface, ssid, password, *, hotspot=False, sae=False):
+def _profile(identifier, unique_id, interface, ssid, password, *, hotspot=False, sae=False, hidden=False):
     text = (MANAGED_MARKER + "[connection]\n" +
             f"id={identifier}\nuuid={unique_id}\ntype=wifi\ninterface-name={interface}\n" +
             "autoconnect=true\n" + ("autoconnect-priority=100\n" if hotspot else "autoconnect-priority=50\n") +
             "\n[wifi]\n" + f"ssid={_escape(ssid)}\nmode={'ap' if hotspot else 'infrastructure'}\n")
     if hotspot:
         text += "band=bg\n"
+    elif hidden:
+        text += "hidden=true\n"
     if password:
         text += "\n[wifi-security]\n" + f"key-mgmt={'sae' if sae else 'wpa-psk'}\npsk={_escape(password)}\n"
     text += "\n[ipv4]\nmethod=" + ("shared" if hotspot else "auto") + "\n"
@@ -218,27 +220,59 @@ def _split_escaped(line):
     return fields
 
 
-def scan(interface):
-    interface = _interface(interface)
-    output = _nm("-t", "-e", "yes", "-f", "SSID,SIGNAL,SECURITY", "device", "wifi",
-                 "list", "--rescan", "yes", "ifname", interface, timeout=35)
-    current_ap = _profile_value(_read_managed(AP_FILE), "ssid") if AP_FILE.exists() else DEFAULT_SSID
+def _scan_networks(output, current_ap):
+    entries = 0
+    unreadable = 0
     networks = {}
     for line in output.splitlines():
+        if not line:
+            continue
+        entries += 1
         fields = _split_escaped(line)
         if len(fields) != 3:
+            unreadable += 1
             continue
         ssid, signal, security = fields
         try:
             _ssid(ssid)
             strength = max(0, min(100, int(signal)))
         except (WifiError, ValueError):
+            unreadable += 1
             continue
         if ssid == current_ap:
             continue
         if ssid not in networks or strength > networks[ssid]["signal"]:
             networks[ssid] = {"ssid": ssid, "signal": strength, "security": security or "Open"}
-    return {"interface": interface, "networks": sorted(networks.values(), key=lambda n: -n["signal"])[:100]}
+    return sorted(networks.values(), key=lambda n: -n["signal"])[:100], entries, unreadable
+
+
+def scan(interface):
+    interface = _interface(interface)
+    if _nm("radio", "wifi").strip() == "disabled":
+        _nm("radio", "wifi", "on")
+        time.sleep(2)
+    current_ap = _profile_value(_read_managed(AP_FILE), "ssid") if AP_FILE.exists() else DEFAULT_SSID
+    output = _nm("-t", "-e", "yes", "-f", "SSID,SIGNAL,SECURITY", "device", "wifi",
+                 "list", "--rescan", "yes", "ifname", interface, timeout=35)
+    networks, entries, unreadable = _scan_networks(output, current_ap)
+    if not networks:
+        # Some drivers return the cached list before an active scan has settled.
+        time.sleep(2)
+        output = _nm("-t", "-e", "yes", "-f", "SSID,SIGNAL,SECURITY", "device", "wifi",
+                     "list", "--rescan", "no", "ifname", interface)
+        networks, entries, unreadable = _scan_networks(output, current_ap)
+    result = {"interface": interface, "networks": networks}
+    if not networks:
+        device_state = _devices().get(interface, {}).get("state", "unknown")
+        if device_state in ("unavailable", "unmanaged"):
+            message = "The USB Wi-Fi adapter is " + device_state + " in NetworkManager. Check its driver and radio switch."
+        elif entries and unreadable == entries:
+            message = "The adapter returned Wi-Fi entries, but PiTV could not read them. You can enter the network name below."
+        else:
+            message = "The USB adapter saw no broadcast Wi-Fi networks. Check its antenna and supported Wi-Fi band, or enter the network name below."
+        result["message"] = message
+        result["device_state"] = device_state
+    return result
 
 
 def connect(state, interface, ssid, password):
@@ -246,10 +280,13 @@ def connect(state, interface, ssid, password):
     ssid = _ssid(ssid)
     if ssid == _profile_value(_read_managed(AP_FILE), "ssid") or ssid == DEFAULT_SSID:
         raise WifiError("Choose the TV network, not the PiTV hotspot itself.")
-    visible = {item["ssid"]: item for item in scan(interface)["networks"]}
-    if ssid not in visible:
-        raise WifiError("That Wi-Fi network is not visible to the USB adapter. Scan again.")
-    security = visible[ssid]["security"].upper()
+    try:
+        visible = {item["ssid"]: item for item in scan(interface)["networks"]}
+    except WifiError:
+        visible = {}
+    # A typed SSID must work even when the AP hides its name or scanning fails
+    # to return it. NetworkManager probes that SSID on connection activation.
+    security = visible[ssid]["security"].upper() if ssid in visible else ("WPA2" if password else "OPEN")
     if "802.1X" in security or "WEP" in security or "WPA1" in security and "WPA2" not in security:
         raise WifiError("This Wi-Fi security type is not supported by PiTV relay mode.")
     open_network = security in ("OPEN", "--", "")
@@ -260,7 +297,8 @@ def connect(state, interface, ssid, password):
         password = _password(password)
     previous = _devices().get(interface, {}).get("connection", "")
     content = _profile(UPLINK_ID, UPLINK_UUID, interface, ssid, password,
-                       sae="WPA3" in security and "WPA2" not in security)
+                       sae="WPA3" in security and "WPA2" not in security,
+                       hidden=ssid not in visible)
     _apply_profile(UPLINK_FILE, content, UPLINK_UUID, interface,
                    previous_connection=previous if previous != UPLINK_ID else "")
     _write_public(state, uplink_ssid=ssid, uplink_interface=interface)
@@ -297,6 +335,9 @@ def provision(state=STATE):
     radio = devices.get(AP_INTERFACE, {})
     if radio.get("type") != "wifi":
         return {"state": "unavailable", "message": "Built-in Wi-Fi or NetworkManager is unavailable."}
+    if _nm("radio", "wifi").strip() == "disabled":
+        _nm("radio", "wifi", "on")
+        time.sleep(2)
     if _read_managed(AP_FILE) is not None:
         return {"state": "existing", "message": "The existing PiTV hotspot configuration was preserved."}
     if radio.get("state") == "connected":
@@ -317,6 +358,10 @@ def status(state=STATE, *, demo=False):
     public = read_json(Path(state) / PUBLIC, {}) or {}
     ap = devices.get(AP_INTERFACE, {})
     adapters = [item for item in usb_adapters() if devices.get(item, {}).get("type") == "wifi"]
+    try:
+        radio_enabled = _nm("radio", "wifi").strip() == "enabled"
+    except WifiError:
+        radio_enabled = False
     uplink_iface = public.get("uplink_interface") if public.get("uplink_interface") in adapters else (adapters[0] if adapters else "")
     uplink = devices.get(uplink_iface, {})
     ssid = public.get("ap_ssid") or DEFAULT_SSID
@@ -338,6 +383,8 @@ def status(state=STATE, *, demo=False):
         except (OSError, ValueError, subprocess.TimeoutExpired):
             pass
     return {"supported": ap.get("type") == "wifi", "demo": False,
+            "radio_enabled": radio_enabled,
+            "adapter_states": {item: devices[item].get("state", "unknown") for item in adapters},
             "ap": {"ssid": ssid, "active": active, "configured": bool(public.get("ap_configured")),
                    "interface": AP_INTERFACE, "address": ap_address,
                    "default_password": bool(public.get("ap_default_password", True))},

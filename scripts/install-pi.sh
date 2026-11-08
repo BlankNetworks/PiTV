@@ -25,10 +25,6 @@ if [ -e "$INSTALL_DIR" ] && [ ! -f "$INSTALL_DIR/UPSTREAM.json" ]; then
   echo "$INSTALL_DIR already exists and is not this application. Nothing was overwritten." >&2
   exit 1
 fi
-EXISTING_INSTALL=0
-if [ -f "$INSTALL_DIR/UPSTREAM.json" ]; then
-  EXISTING_INSTALL=1
-fi
 apt-get update
 apt-get install -y python3 python3-venv python3-pip adb avahi-daemon ca-certificates iproute2 dnsmasq-base
 if ! getent group tvcleaner >/dev/null; then
@@ -130,12 +126,9 @@ systemctl enable --now pitv-update.path
 systemctl enable --now tvcleaner.service
 systemctl enable --now pitv-auto-update.timer
 systemctl enable --now pitv-wifi.path
-# Only the idle built-in radio may be turned into the PITV access point here.
-# NetworkManager is standard on current Raspberry Pi OS; preserve existing Wi-Fi
-# management connections and keep Ethernet entirely outside this operation.
-if [ "${PITV_RELEASE_UPDATE:-}" = 1 ] || [ "$EXISTING_INSTALL" = 1 ]; then
-  echo "Existing network settings were preserved during this app update. Enable PITV Wi-Fi in the web interface."
-elif command -v nmcli >/dev/null && systemctl is-active --quiet NetworkManager.service; then
+# Start PITV Wi-Fi on first install or update when the built-in radio is idle.
+# An active Wi-Fi connection is preserved; Ethernet is never reconfigured.
+if command -v nmcli >/dev/null && systemctl is-active --quiet NetworkManager.service; then
   if ! "$INSTALL_DIR/.venv/bin/python" -m tvcleaner.wifi provision; then
     echo "PiTV Wi-Fi access point was not started. Use the Wi-Fi relay section after checking the adapters." >&2
   fi

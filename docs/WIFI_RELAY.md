@@ -20,19 +20,21 @@ on the PITV network does not need direct discovery of the TV.
 
 ## Set up from the phone page
 
-1. Open `http://pitv.local/` through the Pi's existing network connection. On a
-   fresh install, PiTV starts the PITV access point automatically only when the
-   built-in Wi-Fi radio is idle. An app update preserves the existing Wi-Fi
-   settings; use this page to start the access point for the first time.
-2. Under the two version cards, open **PITV network**. Change the Pi Wi-Fi name
+1. On a fresh install, the PITV Wi-Fi network starts automatically when the
+   built-in radio is idle and NetworkManager is available. App updates also
+   start it when the radio is idle. If that radio already has an active Wi-Fi
+   connection, PiTV preserves it. Open `http://pitv.local/` through either
+   the PITV Wi-Fi or the Pi's existing network connection.
+2. Under the two version cards, expand **PITV network**. Change the Pi Wi-Fi name
    and password if desired, then press **Save and start Pi Wi-Fi**. If your phone
    was using the built-in Wi-Fi's former connection, it may disconnect. Join the
    new Pi network and reopen `http://pitv.local/`. The page shows the Pi's access
    point address as an alternative if `.local` discovery is blocked. The original
    `ssh pi@pitv.local` login also remains available if you chose user `pi`.
-3. Plug in the USB Wi-Fi adapter. Open **Wi-Fi relay**, select the USB adapter,
-   and press **Scan nearby Wi-Fi**. Choose the TV's Wi-Fi name, enter its password,
-   and press **Connect USB Wi-Fi**. The password is transferred to the Pi's local
+3. Plug in the USB Wi-Fi adapter. Expand **Wi-Fi relay**, select the USB adapter,
+   and press **Scan nearby Wi-Fi**. Choose the TV's Wi-Fi name or type it if the
+   scan finds none, enter its password, and press **Connect USB Wi-Fi**. The page
+   reports scan and connection results beside those buttons. The password is transferred to the Pi's local
    web service and stored in a root-only NetworkManager profile. It is not shown
    again on the page or returned by the API.
 4. Connect your phone or tablet to the Pi's access point. Press **Find TVs** in
@@ -53,6 +55,12 @@ on the PITV network does not need direct discovery of the TV.
 - A guest network that isolates Wi-Fi clients may hide the TV from the Pi even
   if internet works. A hotel or other captive portal may require separate login.
   Enterprise 802.1X and WEP Wi-Fi are not supported by the relay form.
+- If a scan finds zero networks, PiTV checks the adapter again before reporting
+  that result. You can still type the exact Wi-Fi name to connect to a hidden
+  network. If connection fails, check the adapter's Linux driver, supported
+  Wi-Fi band, signal, exact network name and password. A USB adapter being listed
+  only means Linux and NetworkManager recognize it; it does not prove its radio
+  can scan or join the nearby network.
 - `pitv.local` uses local multicast discovery. If a device blocks `.local`, use
   the access-point address shown in the page or the Pi's current address from
   the router. The interface does not expose PiTV through the public internet.

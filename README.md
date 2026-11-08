@@ -53,13 +53,13 @@ http://<your-pi-hostname>.local/
 
 Use the Pi's numeric LAN address instead if `.local` discovery is unavailable. This is a local HTTP service for a trusted home network. Anyone who can reach the Pi on that network can operate the manual and advanced controls, including automatic mode. Do not forward its HTTP or ADB ports through the router.
 
-The **Wi-Fi relay** and **PITV network** tabs sit under the two version cards.
+The collapsible **Wi-Fi relay** and **PITV network** sections sit under the two version cards.
 The built-in radio can broadcast `PITV` with initial password `pitv12345`, and
 the USB Wi-Fi adapter can join the TV's network. Both the access-point name and
 password can be changed in the page. The Pi shares internet by NAT and scans
 the upstream network for TVs. See the [Wi-Fi relay guide](docs/WIFI_RELAY.md) for
-setup and network limits. An app upgrade leaves existing network connections
-alone until you choose to start the access point in the page.
+setup and network limits. A fresh install or app update starts the access point
+when the built-in Wi-Fi radio is idle; an active built-in Wi-Fi connection is preserved.
 
 ## First visit to a television
 

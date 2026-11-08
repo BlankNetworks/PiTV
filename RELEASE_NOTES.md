@@ -1,3 +1,14 @@
+# 0.2.8 PiTV release
+
+Prepared November 8, 2026.
+
+- The **Wi-Fi relay** and **PITV network** sections can each be collapsed from their buttons under the version cards.
+- USB Wi-Fi scan retries when NetworkManager first returns no networks and shows a local result message. A typed SSID can now connect even when the scan list is empty or the network is hidden. The page shows connection success or failure beside **Connect USB Wi-Fi**.
+- The installer now starts the default `PITV` / `pitv12345` access point on both fresh installs and updates when built-in Wi-Fi is idle. An active built-in Wi-Fi connection is preserved. The access point autoconnects on later boots.
+- A physical adapter may still need a working Linux driver and support for the upstream Wi-Fi band. This change does not claim physical relay validation or enable automatic TV cleanup.
+
+---
+
 # 0.2.7 PiTV release
 
 Prepared November 8, 2026.

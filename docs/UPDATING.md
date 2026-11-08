@@ -32,10 +32,11 @@ upstream tools, model notes and catalog counts before merging. A merge to `main`
 then follows the normal PiTV test-and-release workflow.
 
 PiTV's Wi-Fi relay worker is installed by the normal release installer. An
-application update does not switch the built-in Wi-Fi or create a new access
-point automatically. Open **PITV network** on the existing PiTV page to start
-it, then use **Wi-Fi relay** to join the TV network with a USB adapter. Existing
-NetworkManager profiles and passwords are preserved across app updates.
+application update starts the PITV access point when the built-in Wi-Fi is idle
+and NetworkManager is available. An active built-in Wi-Fi connection is preserved.
+Open **PITV network** to change the name or password, then use **Wi-Fi relay**
+to join the TV network with a USB adapter. Existing NetworkManager profiles
+and passwords are preserved across app updates.
 
 The GitHub asset digest detects a changed or incomplete download, but is not an
 independent publisher signature. The release repo account remains the trust

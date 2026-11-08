@@ -33,6 +33,32 @@ class WifiTests(unittest.TestCase):
             result = wifi.scan("wlan1")
         self.assertEqual(result["networks"], [{"ssid": "Cafe: TV", "signal": 78, "security": "WPA2 WPA3"}])
 
+    def test_empty_scan_rechecks_cache_and_explains_result(self):
+        with mock.patch.object(wifi, "_interface", return_value="wlan1"), \
+                mock.patch.object(wifi, "_nm", side_effect=["enabled\n", "", ""]), \
+                mock.patch.object(wifi, "_read_managed", return_value=None), \
+                mock.patch.object(wifi, "_devices", return_value={"wlan1": {"state": "disconnected"}}), \
+                mock.patch.object(wifi.time, "sleep"):
+            result = wifi.scan("wlan1")
+        self.assertEqual(result["networks"], [])
+        self.assertIn("enter the network name", result["message"])
+        self.assertEqual(result["device_state"], "disconnected")
+
+    def test_manual_ssid_can_connect_without_scan_results(self):
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory) / "pitv-uplink.nmconnection"
+            with mock.patch.object(wifi, "UPLINK_FILE", target), \
+                    mock.patch.object(wifi, "AP_FILE", Path(directory) / "absent"), \
+                    mock.patch.object(wifi, "_interface", return_value="wlan1"), \
+                    mock.patch.object(wifi, "scan", return_value={"networks": []}), \
+                    mock.patch.object(wifi, "_devices", return_value={"wlan1": {"state": "disconnected"}}), \
+                    mock.patch.object(wifi, "_nm", return_value=""), \
+                    mock.patch.object(wifi, "_write_public"), \
+                    mock.patch.object(wifi, "status", return_value={"uplink": {"connected": True}}):
+                result = wifi.connect(Path(directory), "wlan1", "Hidden TV", "private123")
+            self.assertTrue(result["uplink"]["connected"])
+            self.assertIn("hidden=true", target.read_text())
+
     def test_ap_does_not_replace_only_active_management_wifi(self):
         devices = {"wlan0": {"type": "wifi", "state": "connected", "connection": "Home Wi-Fi"}}
         with mock.patch.object(wifi, "_devices", return_value=devices), \
@@ -41,6 +67,19 @@ class WifiTests(unittest.TestCase):
             with self.assertRaisesRegex(wifi.WifiError, "only network"):
                 wifi.configure_ap(Path("/unused"), "PITV", "pitv12345")
             apply.assert_not_called()
+
+    def test_provision_starts_idle_radio_and_preserves_active_wifi(self):
+        idle = {"wlan0": {"type": "wifi", "state": "disconnected", "connection": ""}}
+        active = {"wlan0": {"type": "wifi", "state": "connected", "connection": "Home Wi-Fi"}}
+        with mock.patch.object(wifi.os, "geteuid", return_value=0), \
+                mock.patch.object(wifi, "_nm", return_value="enabled\n"), \
+                mock.patch.object(wifi, "_read_managed", return_value=None), \
+                mock.patch.object(wifi, "configure_ap", return_value={"ap": {"active": True}}) as configure:
+            with mock.patch.object(wifi, "_devices", return_value=idle):
+                self.assertTrue(wifi.provision(Path("/unused"))["ap"]["active"])
+            configure.assert_called_once_with(Path("/unused"), "PITV", "pitv12345")
+            with mock.patch.object(wifi, "_devices", return_value=active):
+                self.assertEqual(wifi.provision(Path("/unused"))["state"], "preserved")
 
     def test_ap_profile_shares_ipv4_and_validates_password(self):
         profile = wifi._profile(wifi.AP_ID, wifi.AP_UUID, "wlan0", "PITV", "pitv12345", hotspot=True)
