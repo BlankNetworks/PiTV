@@ -46,10 +46,12 @@ REQUIRED_FILES = {
     "UPSTREAM.json", "LICENSE", "README.md", "scripts/install-pi.sh",
     "scripts/pitv-update.service", "scripts/pitv-update.path",
     "scripts/pitv-auto-update.service", "scripts/pitv-auto-update.timer",
+    "scripts/pitv-wifi.service", "scripts/pitv-wifi.path",
     "scripts/pitv-logind.conf", "scripts/pitv-sleep.conf",
     "scripts/cli.py", "tvcleaner/__init__.py", "tvcleaner/__main__.py",
     "tvcleaner/service.py", "tvcleaner/transport.py", "tvcleaner/web.py",
     "tvcleaner/catalog.py", "tvcleaner/policy.py", "tvcleaner/storage.py", "tvcleaner/updates.py",
+    "tvcleaner/wifi.py",
 }
 REQUIRED_PINNED = {
     "LICENSE", "tools/tv.py", "tools/recovery.py", "tools/disable.sh",
@@ -409,11 +411,14 @@ class UpdatePaths:
     update_path: Path = Path("/etc/systemd/system/pitv-update.path")
     auto_update_service: Path = Path("/etc/systemd/system/pitv-auto-update.service")
     auto_update_timer: Path = Path("/etc/systemd/system/pitv-auto-update.timer")
+    wifi_service: Path = Path("/etc/systemd/system/pitv-wifi.service")
+    wifi_path: Path = Path("/etc/systemd/system/pitv-wifi.path")
 
     def managed_files(self):
         return {"service": self.service_file, "wrapper": self.wrapper, "usb_rule": self.usb_rule,
                 "update_service": self.update_service, "update_path": self.update_path,
-                "auto_update_service": self.auto_update_service, "auto_update_timer": self.auto_update_timer}
+                "auto_update_service": self.auto_update_service, "auto_update_timer": self.auto_update_timer,
+                "wifi_service": self.wifi_service, "wifi_path": self.wifi_path}
 
 
 def _disabled_config(state: Path) -> tuple[dict, bytes | None]:
@@ -539,7 +544,7 @@ class ReleaseUpdater:
         with log.open("xb") as output:
             os.fchmod(output.fileno(), 0o600)
             child = subprocess.Popen(["bash", str(self.paths.application / "scripts/install-pi.sh")],
-                                     cwd=self.paths.application, env=self._environment(),
+                                     cwd=self.paths.application, env={**self._environment(), "PITV_RELEASE_UPDATE": "1"},
                                      stdin=subprocess.DEVNULL, stdout=output, stderr=subprocess.STDOUT,
                                      start_new_session=True)
             try:
@@ -605,6 +610,7 @@ class ReleaseUpdater:
         self._command(["systemctl", "stop", SERVICE])
         self._command(["systemctl", "stop", "pitv-update.path"], check=False)
         self._command(["systemctl", "stop", "pitv-auto-update.timer"], check=False)
+        self._command(["systemctl", "stop", "pitv-wifi.path"], check=False)
         previous = self.paths.application.with_name(".tvcleaner-previous-" + record["id"])
         failed = self.paths.application.with_name(".tvcleaner-failed-" + record["id"])
         if previous.exists():
@@ -630,6 +636,9 @@ class ReleaseUpdater:
         self._command(["systemctl", "enable" if record.get("was_auto_update_timer_enabled") else "disable", "pitv-auto-update.timer"], check=False)
         if record.get("was_auto_update_timer_active"):
             self._command(["systemctl", "start", "pitv-auto-update.timer"])
+        self._command(["systemctl", "enable" if record.get("was_wifi_path_enabled") else "disable", "pitv-wifi.path"], check=False)
+        if record.get("was_wifi_path_active"):
+            self._command(["systemctl", "start", "pitv-wifi.path"])
         self._command(["systemctl", "enable" if record["was_enabled"] else "disable", SERVICE])
         if record["was_active"]:
             self._command(["systemctl", "start", SERVICE])
@@ -669,6 +678,8 @@ class ReleaseUpdater:
                       "was_update_path_enabled": self._command(["systemctl", "is-enabled", "--quiet", "pitv-update.path"], check=False).returncode == 0,
                       "was_auto_update_timer_active": self._command(["systemctl", "is-active", "--quiet", "pitv-auto-update.timer"], check=False).returncode == 0,
                       "was_auto_update_timer_enabled": self._command(["systemctl", "is-enabled", "--quiet", "pitv-auto-update.timer"], check=False).returncode == 0,
+                      "was_wifi_path_active": self._command(["systemctl", "is-active", "--quiet", "pitv-wifi.path"], check=False).returncode == 0,
+                      "was_wifi_path_enabled": self._command(["systemctl", "is-enabled", "--quiet", "pitv-wifi.path"], check=False).returncode == 0,
                       "managed_files": self._backup_managed(folder), "automatic_enabled": False}
             self._journal(folder, record)
             staging_parent = Path(tempfile.mkdtemp(prefix=".tvcleaner-stage-", dir=self.paths.application.parent))
@@ -681,6 +692,7 @@ class ReleaseUpdater:
                 self._journal(folder, record)
                 service_touched = True
                 self._command(["systemctl", "stop", SERVICE])
+                self._command(["systemctl", "stop", "pitv-wifi.path"], check=False)
                 record["status"] = "switching"
                 self._journal(folder, record)
                 previous = self.paths.application.with_name(".tvcleaner-previous-" + identifier)

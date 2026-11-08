@@ -25,8 +25,12 @@ if [ -e "$INSTALL_DIR" ] && [ ! -f "$INSTALL_DIR/UPSTREAM.json" ]; then
   echo "$INSTALL_DIR already exists and is not this application. Nothing was overwritten." >&2
   exit 1
 fi
+EXISTING_INSTALL=0
+if [ -f "$INSTALL_DIR/UPSTREAM.json" ]; then
+  EXISTING_INSTALL=1
+fi
 apt-get update
-apt-get install -y python3 python3-venv python3-pip adb avahi-daemon ca-certificates iproute2
+apt-get install -y python3 python3-venv python3-pip adb avahi-daemon ca-certificates iproute2 dnsmasq-base
 if ! getent group tvcleaner >/dev/null; then
   groupadd --system tvcleaner
 fi
@@ -80,6 +84,8 @@ install -o root -g root -m 0644 "$INSTALL_DIR/scripts/pitv-update.service" /etc/
 install -o root -g root -m 0644 "$INSTALL_DIR/scripts/pitv-update.path" /etc/systemd/system/pitv-update.path
 install -o root -g root -m 0644 "$INSTALL_DIR/scripts/pitv-auto-update.service" /etc/systemd/system/pitv-auto-update.service
 install -o root -g root -m 0644 "$INSTALL_DIR/scripts/pitv-auto-update.timer" /etc/systemd/system/pitv-auto-update.timer
+install -o root -g root -m 0644 "$INSTALL_DIR/scripts/pitv-wifi.service" /etc/systemd/system/pitv-wifi.service
+install -o root -g root -m 0644 "$INSTALL_DIR/scripts/pitv-wifi.path" /etc/systemd/system/pitv-wifi.path
 # The PiTV appliance must remain reachable when idle. Keep explicit policy
 # drop-ins so later package updates do not restore default sleep behavior.
 install -d -m 0755 /etc/systemd/logind.conf.d /etc/systemd/sleep.conf.d
@@ -123,6 +129,19 @@ systemctl enable --now avahi-daemon
 systemctl enable --now pitv-update.path
 systemctl enable --now tvcleaner.service
 systemctl enable --now pitv-auto-update.timer
+systemctl enable --now pitv-wifi.path
+# Only the idle built-in radio may be turned into the PITV access point here.
+# NetworkManager is standard on current Raspberry Pi OS; preserve existing Wi-Fi
+# management connections and keep Ethernet entirely outside this operation.
+if [ "${PITV_RELEASE_UPDATE:-}" = 1 ] || [ "$EXISTING_INSTALL" = 1 ]; then
+  echo "Existing network settings were preserved during this app update. Enable PITV Wi-Fi in the web interface."
+elif command -v nmcli >/dev/null && systemctl is-active --quiet NetworkManager.service; then
+  if ! "$INSTALL_DIR/.venv/bin/python" -m tvcleaner.wifi provision; then
+    echo "PiTV Wi-Fi access point was not started. Use the Wi-Fi relay section after checking the adapters." >&2
+  fi
+else
+  echo "PiTV Wi-Fi relay requires NetworkManager; the existing network was not changed." >&2
+fi
 echo "Installed. Open http://$(hostname -s).local/ on your phone on the same reachable local network."
 # The old local updater still checks access.json for compatibility with v0.2.0.
 # The web pages never require or display this token.

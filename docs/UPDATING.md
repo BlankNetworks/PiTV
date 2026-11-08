@@ -31,6 +31,12 @@ or approves an unattended TV cleanup recipe. Review the changed package lists,
 upstream tools, model notes and catalog counts before merging. A merge to `main`
 then follows the normal PiTV test-and-release workflow.
 
+PiTV's Wi-Fi relay worker is installed by the normal release installer. An
+application update does not switch the built-in Wi-Fi or create a new access
+point automatically. Open **PITV network** on the existing PiTV page to start
+it, then use **Wi-Fi relay** to join the TV network with a USB adapter. Existing
+NetworkManager profiles and passwords are preserved across app updates.
+
 The GitHub asset digest detects a changed or incomplete download, but is not an
 independent publisher signature. The release repo account remains the trust
 source. A manual reviewed ZIP update is also supported as described below.

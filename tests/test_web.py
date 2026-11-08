@@ -110,6 +110,16 @@ class WebTests(unittest.TestCase):
             self.assertTrue(install.call_args.kwargs["demo"])
         self.assertEqual(self.request("/api/visit/update/anything", {})[0], 404)
 
+    def test_wifi_relay_routes_are_tokenless_and_do_not_touch_real_network_in_demo(self):
+        status, wifi = self.request("/api/visit/wifi/status")
+        self.assertEqual(status, 200)
+        self.assertTrue(wifi["demo"])
+        self.assertEqual(wifi["ap"]["ssid"], "PITV")
+        networks = self.job("/api/visit/wifi/scan", {"interface": "wlan1"})
+        self.assertEqual(networks["networks"][0]["ssid"], "Demo TV Wi-Fi")
+        self.assertTrue(self.job("/api/visit/wifi/connect", {"interface": "wlan1", "ssid": "Demo TV Wi-Fi", "password": "examplepass"})["demo"])
+        self.assertEqual(self.request("/api/visit/wifi/ap", {"ssid": "PITV", "password": "pitv12345"}, origin="http://attacker.example")[0], 403)
+
     def test_complete_demo_api_workflow(self):
         status, initial = self.request("/api/status")
         self.assertTrue(initial["demo"])

@@ -1,0 +1,9 @@
+[Unit]
+Description=Watch for a PiTV Wi-Fi relay request
+
+[Path]
+PathExists=/var/lib/tvcleaner/state/wifi-request.json
+Unit=pitv-wifi.service
+
+[Install]
+WantedBy=multi-user.target

@@ -19,6 +19,7 @@ A portable, local controller built on the [CleanYourTV](https://github.com/Gathi
 | Changes | Disable selected packages for Android user 0, in batches of at most five |
 | Automatic visits | Enrolled devices or owner-verified exact firmware recipes |
 | Local TV operation | Cleanup and restore stay on the LAN; release checks use public GitHub |
+| Wi-Fi relay | Built-in Pi access point plus a separate USB Wi-Fi uplink; NetworkManager shares internet by NAT |
 
 All upstream lists, their alternate variants, notes and original tools are included under `vendor/cleanyourtv/`. The controller does not combine a manufacturer's different lists or try them successively against a television. It gathers evidence, ranks possible matches and uses the one the owner reviews.
 
@@ -32,7 +33,7 @@ The TV must offer debugging access and the owner must approve the Pi on the TV. 
 
 ## Prepare the Pi
 
-Use Raspberry Pi OS **64-bit**, preferably Lite, on a Pi 4. Follow the [first-install guide](docs/INSTALL_PI.md) to set hostname `pitv`, enable SSH, and choose a unique SSH password or key. The installer does not reflash the SD card, change the Pi's hostname, reconfigure Wi-Fi or replace the router. Bring a proper Pi power supply. Ethernet to the home's router is the easiest way to get a headless Pi online.
+Use Raspberry Pi OS **64-bit**, preferably Lite, on a Pi 4. Follow the [first-install guide](docs/INSTALL_PI.md) to set hostname `pitv`, enable SSH, and choose a unique SSH password or key. The installer does not reflash the SD card, change the Pi's hostname, replace an active Wi-Fi management connection or reconfigure the router. Bring a proper Pi power supply. Ethernet to the home's router is the easiest way to get a headless Pi online.
 
 After SSH connects, paste one command on the Pi:
 
@@ -51,6 +52,14 @@ http://<your-pi-hostname>.local/
 ```
 
 Use the Pi's numeric LAN address instead if `.local` discovery is unavailable. This is a local HTTP service for a trusted home network. Anyone who can reach the Pi on that network can operate the manual and advanced controls, including automatic mode. Do not forward its HTTP or ADB ports through the router.
+
+The **Wi-Fi relay** and **PITV network** tabs sit under the two version cards.
+The built-in radio can broadcast `PITV` with initial password `pitv12345`, and
+the USB Wi-Fi adapter can join the TV's network. Both the access-point name and
+password can be changed in the page. The Pi shares internet by NAT and scans
+the upstream network for TVs. See the [Wi-Fi relay guide](docs/WIFI_RELAY.md) for
+setup and network limits. An app upgrade leaves existing network connections
+alone until you choose to start the access point in the page.
 
 ## First visit to a television
 

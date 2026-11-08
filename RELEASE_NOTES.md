@@ -1,3 +1,14 @@
+# 0.2.7 PiTV release
+
+Prepared November 8, 2026.
+
+- A new **Wi-Fi relay** tab under the version cards scans nearby networks through a separate USB Wi-Fi adapter and connects it to the TV's Wi-Fi. A **PITV network** tab beside it starts the built-in access point and lets the owner change its SSID and password. The default is `PITV` / `pitv12345`.
+- NetworkManager's shared IPv4 mode provides DHCP, DNS and NAT to phones on the Pi access point. The Pi scans the USB adapter's local subnet for TVs, then uses the existing supervised cleanup and restore flow. This is routed sharing, not a transparent bridge.
+- Fresh installation starts the access point only when built-in Wi-Fi is idle; release upgrades preserve existing network connections until the owner starts the access point in the page. Ethernet is never reconfigured by this feature. Wi-Fi credentials are handled by a separate root worker and stored in root-only NetworkManager profiles.
+- The relay has automated and demo tests, but has not yet been validated on a physical USB adapter, TV and phone together. Automatic TV cleanup stays off.
+
+---
+
 # 0.2.6 PiTV release
 
 Prepared November 8, 2026.

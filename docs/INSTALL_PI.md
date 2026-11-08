@@ -51,6 +51,12 @@ hibernation. The PiTV service starts on boot. The installer does not change SSH
 accounts, passwords, keys or SSH service settings, so your original SSH login
 continues to work. Keep the Pi powered and connected
 to the internet during this first installation.
+With current Raspberry Pi OS and an idle built-in Wi-Fi radio, first installation
+also starts the PITV access point. Its initial password is `pitv12345`. See the
+[Wi-Fi relay guide](WIFI_RELAY.md) to connect a USB Wi-Fi adapter to the TV's
+network and change the access-point name and password. If the built-in Wi-Fi is
+already used for management, the installer preserves that connection and the
+access point can be started later in the phone page.
 
 For a manual checkout instead, clone the current stable tag from the
 [PiTV releases page](https://github.com/BlankNetworks/PiTV/releases) and run

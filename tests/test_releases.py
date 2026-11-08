@@ -342,7 +342,9 @@ class ReleaseUpdateTransactionTests(unittest.TestCase):
                                  update_service=self.root / "units/pitv-update.service",
                                  update_path=self.root / "units/pitv-update.path",
                                  auto_update_service=self.root / "units/pitv-auto-update.service",
-                                 auto_update_timer=self.root / "units/pitv-auto-update.timer")
+                                 auto_update_timer=self.root / "units/pitv-auto-update.timer",
+                                 wifi_service=self.root / "units/pitv-wifi.service",
+                                 wifi_path=self.root / "units/pitv-wifi.path")
         self.paths.service_file.write_text("old service")
         self.paths.wrapper.write_text("old wrapper")
         self.config = {"automatic": {"enabled": True, "network_mode": "auto", "usb": True, "policy": "recipes", "cidr": ""},

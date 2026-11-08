@@ -1,0 +1,11 @@
+[Unit]
+Description=Configure PiTV Wi-Fi relay through NetworkManager
+After=NetworkManager.service
+ConditionPathExists=/opt/universal-tv-debloater/tvcleaner/wifi.py
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/universal-tv-debloater
+ExecStart=/opt/universal-tv-debloater/.venv/bin/python -m tvcleaner.wifi worker
+TimeoutStartSec=2min
+UMask=0077

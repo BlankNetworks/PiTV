@@ -10,7 +10,7 @@ import time
 from urllib.parse import parse_qs, urlsplit
 
 from .storage import atomic_json, read_json
-from . import updates
+from . import updates, wifi
 
 
 class Jobs:
@@ -112,7 +112,7 @@ def make_server(service, host="127.0.0.1", port=8080):
                 return
             public_visit = url.path.startswith("/api/visit/")
             path = url.path.replace("/api/visit/", "/api/", 1) if public_visit else url.path
-            if public_visit and path not in ("/api/status", "/api/runs", "/api/update/status") and not path.startswith("/api/jobs/"):
+            if public_visit and path not in ("/api/status", "/api/runs", "/api/update/status", "/api/wifi/status") and not path.startswith("/api/jobs/"):
                 self.respond(404, {"error": "Not found"})
                 return
             if not self.local_request_allowed():
@@ -129,6 +129,8 @@ def make_server(service, host="127.0.0.1", port=8080):
                     data = service.list_recipes()
                 elif path == "/api/update/status":
                     data = updates.status(service.state)
+                elif path == "/api/wifi/status":
+                    data = wifi.status(service.state, demo=service.demo)
                 elif path.startswith("/api/jobs/"):
                     data = jobs.get(path.rsplit("/", 1)[-1])
                 else:
@@ -144,7 +146,7 @@ def make_server(service, host="127.0.0.1", port=8080):
             raw_path = urlsplit(self.path).path
             public_visit = raw_path.startswith("/api/visit/")
             path = raw_path.replace("/api/visit/", "/api/", 1) if public_visit else raw_path
-            if public_visit and path not in ("/api/scan", "/api/connect", "/api/pair", "/api/inspect", "/api/plan", "/api/apply", "/api/restore", "/api/update/check", "/api/update/install"):
+            if public_visit and path not in ("/api/scan", "/api/connect", "/api/pair", "/api/inspect", "/api/plan", "/api/apply", "/api/restore", "/api/update/check", "/api/update/install", "/api/wifi/scan", "/api/wifi/connect", "/api/wifi/ap"):
                 self.respond(404, {"error": "Not found"})
                 return
             if not self.local_request_allowed():
@@ -179,6 +181,9 @@ def make_server(service, host="127.0.0.1", port=8080):
                     self.respond(200, service.set_recipe_enabled(value.get("id", ""), value.get("enabled")))
                 elif path == "/api/update/install":
                     self.respond(200, updates.request_install(service.state, value.get("version"), value.get("sha256"), demo=service.demo))
+                elif path in ("/api/wifi/scan", "/api/wifi/connect", "/api/wifi/ap"):
+                    action = path.rsplit("/", 1)[-1]
+                    self.respond(202, jobs.submit(lambda: wifi.request(service.state, action, value, demo=service.demo)))
                 elif path in routes:
                     function, args = routes[path]
                     self.respond(202, jobs.submit(function, *args))
