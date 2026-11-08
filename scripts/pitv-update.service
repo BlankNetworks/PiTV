@@ -1,0 +1,11 @@
+[Unit]
+Description=Install a reviewed PiTV release
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/universal-tv-debloater
+ExecStart=/opt/universal-tv-debloater/.venv/bin/python -m tvcleaner.updates install-request
+TimeoutStartSec=45min
+UMask=0077

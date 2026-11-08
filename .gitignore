@@ -1,0 +1,15 @@
+.venv/
+__pycache__/
+*.pyc
+.DS_Store
+.state/
+state/
+*.log
+launcher-artifact.json
+vendor/cleanyourtv/tools/venv
+vendor/cleanyourtv/tools/adbkey/
+vendor/cleanyourtv/launcher/.gradle/
+vendor/cleanyourtv/launcher/local.properties
+vendor/cleanyourtv/launcher/**/build/
+vendor/cleanyourtv/backup/
+vendor/cleanyourtv/shots/
