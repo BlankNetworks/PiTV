@@ -144,7 +144,7 @@ class CleanerService:
         networks = [{"interface": "demo", "cidr": "192.168.1.0/24"}] if self.demo else local_networks()
         return {"version": __version__, "demo": self.demo, "catalog": self.catalog.summary(),
                 "networks": networks, "automatic": dict(self.config["automatic"]),
-                "upstream": {"commit": self.manifest["commit"]},
+                "upstream": {"commit": self.manifest["commit"], "tag": self.manifest.get("tag", "")},
                 "launcher": {"available": self.launcher_available()},
                 "appliance": read_json(self.state / "appliance.json", {"phase": "idle", "message": "Waiting for automatic mode."}),
                 "recipes": self.list_recipes(),
@@ -158,8 +158,9 @@ class CleanerService:
         from .discovery import discover_networks, validate_network
         if not isinstance(cidr, str) or not isinstance(include_usb, bool):
             raise ServiceError("Choose a local network and whether to include USB devices.")
-        if cidr:
-            validate_network(cidr)
+        scan_range = "auto" if not cidr or cidr.upper() == "ALL" else cidr
+        if scan_range != "auto":
+            validate_network(scan_range)
         if self.demo:
             return {"devices": [{"endpoint": "192.168.1.50:5555", "address": "192.168.1.50", "port": 5555,
                                  "transport": "demo", "status": "Demo TV ready"}]}
@@ -169,7 +170,7 @@ class CleanerService:
                 devices.extend(self.transport.usb_devices())
             except Exception as error:
                 warnings.append("USB discovery: " + str(error))
-        found = discover_networks(cidr or "auto", adb_binary=self.transport.binary, home=self.home)
+        found = discover_networks(scan_range, adb_binary=self.transport.binary, home=self.home)
         devices.extend(found["devices"])
         warnings.extend(found.get("warnings", []))
         networks = found.get("networks", [])

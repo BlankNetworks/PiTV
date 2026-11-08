@@ -84,6 +84,8 @@ class WebTests(unittest.TestCase):
         self.assertEqual(self.request("/api/visit/status", origin="http://attacker.example")[0], 403)
         self.assertEqual(self.request("/api/visit/automatic", {"enabled": True})[0], 404)
         self.assertFalse(self.service.config["automatic"]["enabled"])
+        all_scan = self.job("/api/visit/scan", {"cidr": "ALL"})
+        self.assertEqual(all_scan["devices"][0]["transport"], "demo")
         scan = self.job("/api/visit/scan", {"cidr": "192.168.1.0/24"})
         endpoint = scan["devices"][0]["endpoint"]
         self.job("/api/visit/connect", {"endpoint": endpoint})

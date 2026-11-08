@@ -1,6 +1,6 @@
 # Universal TV Debloater for Raspberry Pi
 
-A portable, local controller for the [CleanYourTV](https://github.com/Gathin23/cleanyourtv) catalog. Prepare a Raspberry Pi once, take it to a home, connect it to that home's network, and control cleanup from your phone or tablet.
+A portable, local controller built on the [CleanYourTV](https://github.com/Gathin23/cleanyourtv) catalog. Prepare a Raspberry Pi once, take it to a home, connect it to that home's network, and control cleanup from your phone or tablet.
 
 **PiTV is in supervised rollout.** The controller, discovery, matching, web API and recovery flows have automated simulation tests. The Pi service has been installed and checked on a Raspberry Pi, but no physical television has been cleaned by this appliance yet. Start with the demo, then a supervised test on one TV. Catalog coverage is community source coverage, not a claim that every listed television has been tested with this controller.
 
@@ -61,7 +61,7 @@ Use the Pi's numeric LAN address instead if `.local` discovery is unavailable. T
 4. Scan the local subnet or enter the TV's private IPv4 address. Select the device and accept its debugging prompt. For wireless debugging, use **Pair** with the pairing port and six-digit code, then **Connect** with the separate connection port shown on the TV.
 5. Inspect the TV. Review the suggested profile, its Android version and its model/firmware notes. A match score is a suggestion, not validation that the entire list is appropriate.
 6. Review the packages. A small set of known telemetry/content-recognition packages is selected by default only when present in both the chosen list and the TV. Optional packages are not automatically selected. Core packages, active input and keyboard services, Home, setup, known updates/casting/voice services, user-installed apps and known streaming applications are protected.
-7. Select **Clean selected packages**. The controller re-reads the TV, records its original state, applies bounded batches through upstream tools and verifies package states and Home. A failure stops further cleanup and attempts restoration.
+7. Press **Clean your TV** once after reviewing the selected packages. The controller re-reads the TV, records its original state, applies bounded batches through upstream tools and verifies package states and Home. A failure stops further cleanup and attempts restoration.
 8. Check Home, real remote buttons, HDMI/Live TV inputs, Wi-Fi, voice/casting and the apps the household uses. Turn debugging off after a one-time cleanup. You can take the Pi home; disabled packages remain on the TV until re-enabled or changed by an update/reset.
 
 The preserved-package policy is intentionally conservative. This release does not provide a switch that bypasses upstream core/Home guards. Some vendor-specific services remain optional and still need their notes reviewed.
@@ -115,6 +115,10 @@ manually. Both paths update the PiTV app and its pinned
 CleanYourTV profile snapshot together. It does not install a TV manufacturer's
 firmware. Automatic TV cleanup stays off after an app update. See
 [updating](docs/UPDATING.md) for the release checks, recovery and manual ZIP path.
+
+PiTV also checks for a new stable CleanYourTV release once a day and opens a
+review pull request when one appears. New upstream profiles are not merged or
+sent to the Pi until that pull request is reviewed and a PiTV release passes tests.
 
 **This release preserves the current home screen.** The reference launcher source is included, but there is no prebuilt APK and no automatic launcher handover. The upstream Linux Android resource compiler has an x86-64 requirement, and some TV models need different Home/remote procedures. Those must be prepared and tested separately before adding them to unattended operation. See [launcher preparation](docs/LAUNCHER.md).
 

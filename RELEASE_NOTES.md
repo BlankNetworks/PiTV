@@ -1,3 +1,15 @@
+# 0.2.4 PiTV release
+
+Prepared November 8, 2026.
+
+- The guided and advanced pages now show separate PiTV app and pinned CleanYourTV profile versions, with responsive cards that stack on phones.
+- The top of each page credits and links to the CleanYourTV project. The pinned profile snapshot is v3.4.0 at commit `fc148d5a9707b30e8f49f489625947421740dc55`.
+- The scan scope defaults to ALL connected local private networks and USB, with bounded /24 scans. The final reviewed action is labeled **Clean your TV** and explains the restore record, selected changes and checks in plain English. No token is needed.
+- No real TV cleanup has been validated yet. The user must still enable and authorize debugging, select a TV, and review its suggested packages before pressing the final button.
+- A daily GitHub Actions check opens a review pull request when CleanYourTV publishes a new stable version. It does not merge or deploy upstream changes automatically. The installation guide uses `pi@pitv.local` when the owner selected user `pi` and preserves that SSH setup.
+
+---
+
 # 0.2.3 PiTV release
 
 Prepared November 8, 2026.

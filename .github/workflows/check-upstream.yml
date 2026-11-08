@@ -1,0 +1,81 @@
+name: Propose CleanYourTV updates
+
+on:
+  schedule:
+    - cron: '17 6 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  propose:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Install snapshot tooling
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y rsync
+      - name: Check the latest stable CleanYourTV release
+        id: upstream
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --location --max-time 25 \
+            --header 'Accept: application/vnd.github+json' \
+            --header 'User-Agent: PiTV-upstream-check' \
+            https://api.github.com/repos/Gathin23/cleanyourtv/releases/latest \
+            --output "$RUNNER_TEMP/cleanyourtv-release.json"
+          tag=$(python3 -c 'import json,os; print(json.load(open(os.environ["RUNNER_TEMP"]+"/cleanyourtv-release.json"))["tag_name"])')
+          if [[ ! "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Unexpected upstream release tag: $tag" >&2
+            exit 1
+          fi
+          git clone --quiet --depth 1 --branch "$tag" https://github.com/Gathin23/cleanyourtv.git "$RUNNER_TEMP/cleanyourtv"
+          commit=$(git -C "$RUNNER_TEMP/cleanyourtv" rev-parse HEAD)
+          current=$(python3 -c 'import json; print(json.load(open("UPSTREAM.json"))["commit"])')
+          if [ "$commit" = "$current" ]; then
+            echo "CleanYourTV $tag is already pinned."
+            echo 'changed=false' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo 'changed=true' >> "$GITHUB_OUTPUT"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "commit=$commit" >> "$GITHUB_OUTPUT"
+          rsync -a --delete --exclude=.git/ "$RUNNER_TEMP/cleanyourtv/" vendor/cleanyourtv/
+          python3 scripts/pin-upstream.py "$RUNNER_TEMP/cleanyourtv" --commit "$commit" --tag "$tag"
+          python3 scripts/prepare-upstream-pr.py --tag "$tag" --commit "$commit"
+      - name: Open a review pull request
+        if: steps.upstream.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          UPSTREAM_TAG: ${{ steps.upstream.outputs.tag }}
+          UPSTREAM_COMMIT: ${{ steps.upstream.outputs.commit }}
+        run: |
+          set -euo pipefail
+          branch="upstream/cleanyourtv-$UPSTREAM_TAG"
+          if [ "$(gh pr list --repo "$GITHUB_REPOSITORY" --state all --head "$branch" --json number --jq 'length')" != 0 ]; then
+            echo "An upstream review pull request already exists for $UPSTREAM_TAG."
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git checkout -b "$branch"
+          git add UPSTREAM.json RELEASE_NOTES.md tvcleaner/__init__.py vendor/cleanyourtv
+          git diff --cached --check -- . ':!vendor/cleanyourtv'
+          git commit -m "Propose CleanYourTV $UPSTREAM_TAG snapshot"
+          gh auth setup-git
+          git push origin "$branch"
+          cat > "$RUNNER_TEMP/upstream-pr.md" <<EOF
+          This proposes the pinned CleanYourTV $UPSTREAM_TAG release at $UPSTREAM_COMMIT.
+
+          Review the changed package lists, profile notes, upstream tools, and catalog counts before merging. A merged PiTV version is tested and released by the main-branch workflow; the Pi installs only that stable PiTV release. This pull request does not approve unattended TV cleanup.
+
+          Upstream: https://github.com/Gathin23/cleanyourtv/releases/tag/$UPSTREAM_TAG
+          EOF
+          gh pr create --repo "$GITHUB_REPOSITORY" --base main --head "$branch" \
+            --title "Review CleanYourTV $UPSTREAM_TAG for PiTV" --body-file "$RUNNER_TEMP/upstream-pr.md"

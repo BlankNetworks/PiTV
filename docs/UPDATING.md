@@ -24,6 +24,13 @@ builds and inspects a ZIP from that commit, then publishes it as the latest stab
 release. A push without a new version fails release publishing. No Git credential
 is stored on the Pi, and it does not run `git pull` after first installation.
 
+The repo's daily `check-upstream.yml` workflow checks the latest stable
+CleanYourTV release. A newer tag produces a pinned vendor snapshot and a PiTV
+version bump in a **pull request for review**. It never merges upstream changes
+or approves an unattended TV cleanup recipe. Review the changed package lists,
+upstream tools, model notes and catalog counts before merging. A merge to `main`
+then follows the normal PiTV test-and-release workflow.
+
 The GitHub asset digest detects a changed or incomplete download, but is not an
 independent publisher signature. The release repo account remains the trust
 source. A manual reviewed ZIP update is also supported as described below.

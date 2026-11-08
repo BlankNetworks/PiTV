@@ -1,6 +1,7 @@
 {
   "repository": "https://github.com/Gathin23/cleanyourtv",
   "commit": "fc148d5a9707b30e8f49f489625947421740dc55",
+  "tag": "v3.4.0",
   "files": {
     ".editorconfig": "85fd220517f82a2ed0151c3ee327c530b60a92c9ab359fb6c8aa8ef4c7c7ea6e",
     ".gitattributes": "0028b087128f4c05ac5b6ca99d0c6c56eee6ea3fc254f38d02130c5111758c22",
