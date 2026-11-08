@@ -1,3 +1,14 @@
+# 0.2.9 PiTV release
+
+Prepared November 8, 2026.
+
+- The guided page starts with both Wi-Fi sections collapsed. Optional package and restore details also stay closed until selected.
+- **Disconnect USB Wi-Fi** ends only the PiTV-managed USB uplink and disables automatic reconnection of that saved uplink. The PITV access point remains on.
+- A cleanup can be given an optional name such as **Living room TV** before it runs. The name appears in Cleanup history on both pages and can be changed or cleared later without changing the restore backup or target verification.
+- Automatic TV cleanup remains off. The new controls are covered by local API, service and Wi-Fi tests; physical TV restore and two-radio Wi-Fi use remain to be observed.
+
+---
+
 # 0.2.8 PiTV release
 
 Prepared November 8, 2026.

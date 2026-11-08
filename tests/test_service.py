@@ -216,6 +216,29 @@ class ServiceFixture(unittest.TestCase):
 
 
 class DemoLifecycleTests(ServiceFixture):
+    def test_restore_record_can_be_named_and_renamed_without_changing_evidence(self):
+        plan = self.plan()
+        result = self.service.apply(plan["id"], [ANALYTICS], name=" Living room TV ")
+        self.assertEqual(result["name"], "Living room TV")
+        before = self.private_run(result)
+        renamed = self.service.rename_run(result["id"], "Den TV")
+        self.assertEqual(renamed["name"], "Den TV")
+        after = self.private_run(result)
+        self.assertEqual(after["before_digest"], before["before_digest"])
+        self.assertEqual(after["after_digest"], before["after_digest"])
+        self.assertEqual(self.service.list_runs()["runs"][0]["name"], "Den TV")
+        self.assertEqual(self.service.restore(result["id"], ENDPOINT)["name"], "Den TV")
+        self.assertEqual(self.service.rename_run(result["id"], "")["name"], "")
+
+    def test_restore_names_are_validated_before_cleanup(self):
+        plan = self.plan()
+        for bad_name in ("x" * 65, "line\nbreak", 123):
+            with self.subTest(name=bad_name), self.assertRaises(ServiceError):
+                self.service.apply(plan["id"], [ANALYTICS], name=bad_name)
+        self.assertEqual(self.service.list_runs()["runs"], [])
+        with self.assertRaises(ServiceError):
+            self.service.rename_run("not-an-id", "Living room")
+
     def test_apply_restore_round_trip_and_durable_private_backup(self):
         before = self.transport.snapshot(ENDPOINT)
         result = self.cleanup()

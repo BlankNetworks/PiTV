@@ -37,6 +37,9 @@ on the PITV network does not need direct discovery of the TV.
    reports scan and connection results beside those buttons. The password is transferred to the Pi's local
    web service and stored in a root-only NetworkManager profile. It is not shown
    again on the page or returned by the API.
+   When you are done with that network, press **Disconnect USB Wi-Fi**. This
+   disconnects the PiTV-managed USB uplink and stops that saved uplink from
+   reconnecting automatically. It does not turn off the PITV access point.
 4. Connect your phone or tablet to the Pi's access point. Press **Find TVs** in
    the relay panel, or use the normal TV-finding step. PiTV scans up to four
    connected private local /24 ranges, including the USB adapter's network. If

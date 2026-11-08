@@ -146,7 +146,7 @@ def make_server(service, host="127.0.0.1", port=8080):
             raw_path = urlsplit(self.path).path
             public_visit = raw_path.startswith("/api/visit/")
             path = raw_path.replace("/api/visit/", "/api/", 1) if public_visit else raw_path
-            if public_visit and path not in ("/api/scan", "/api/connect", "/api/pair", "/api/inspect", "/api/plan", "/api/apply", "/api/restore", "/api/update/check", "/api/update/install", "/api/wifi/scan", "/api/wifi/connect", "/api/wifi/ap"):
+            if public_visit and path not in ("/api/scan", "/api/connect", "/api/pair", "/api/inspect", "/api/plan", "/api/apply", "/api/restore", "/api/runs/name", "/api/update/check", "/api/update/install", "/api/wifi/scan", "/api/wifi/connect", "/api/wifi/disconnect", "/api/wifi/ap"):
                 self.respond(404, {"error": "Not found"})
                 return
             if not self.local_request_allowed():
@@ -168,8 +168,9 @@ def make_server(service, host="127.0.0.1", port=8080):
                     "/api/pair": (service.pair, (value.get("endpoint", ""), value.get("code", ""))),
                     "/api/inspect": (service.inspect, (value.get("endpoint", ""),)),
                     "/api/plan": (service.plan, (value.get("endpoint", ""), value.get("profile_id", ""))),
-                    "/api/apply": (service.apply, (value.get("plan_id", ""), value.get("packages", []), value.get("enroll", False))),
+                    "/api/apply": (service.apply, (value.get("plan_id", ""), value.get("packages", []), value.get("enroll", False), value.get("name", ""))),
                     "/api/restore": (service.restore, (value.get("run_id", ""), value.get("endpoint", ""))),
+                    "/api/runs/name": (service.rename_run, (value.get("run_id", ""), value.get("name", ""))),
                     "/api/report": (service.support_report, (value.get("endpoint", ""),)),
                     "/api/recipes/create": (service.create_recipe, (value.get("run_id", ""), value.get("checks"), value.get("notes", ""))),
                     "/api/automatic/unblock": (service.clear_automatic_block, (value.get("endpoint", ""),)),
@@ -181,7 +182,7 @@ def make_server(service, host="127.0.0.1", port=8080):
                     self.respond(200, service.set_recipe_enabled(value.get("id", ""), value.get("enabled")))
                 elif path == "/api/update/install":
                     self.respond(200, updates.request_install(service.state, value.get("version"), value.get("sha256"), demo=service.demo))
-                elif path in ("/api/wifi/scan", "/api/wifi/connect", "/api/wifi/ap"):
+                elif path in ("/api/wifi/scan", "/api/wifi/connect", "/api/wifi/disconnect", "/api/wifi/ap"):
                     action = path.rsplit("/", 1)[-1]
                     self.respond(202, jobs.submit(lambda: wifi.request(service.state, action, value, demo=service.demo)))
                 elif path in routes:

@@ -314,29 +314,40 @@ class CleanerService:
         elif self.config["enrollments"].get(expected["enrollment"]["binding"]["device"]) != expected["enrollment"]:
             raise ServiceError("This TV's automatic approval changed. No automatic cleanup will continue.")
 
-    def _new_run(self, plan, snapshot, kind="cleanup"):
+    @staticmethod
+    def _run_name(value):
+        if not isinstance(value, str):
+            raise ServiceError("Enter a name for this restore record.")
+        name = value.strip()
+        if (len(name) > 64 or len(name.encode("utf-8")) > 128
+                or any(not char.isprintable() for char in name)):
+            raise ServiceError("A restore name must be at most 64 printable characters.")
+        return name
+
+    def _new_run(self, plan, snapshot, kind="cleanup", name=""):
         run_id = secrets.token_hex(16)
         folder = private_dir(self.runs_dir / run_id)
         atomic_json(folder / "before.json", snapshot)
         atomic_json(folder / "plan.json", plan)
         run = {"id": run_id, "created_at": time.time(), "kind": kind, "demo": self.demo,
                "status": "applying", "endpoint": plan["endpoint"], "binding": binding(snapshot),
-               "tv": public_identity(snapshot), "profile_id": plan["profile"]["id"],
+               "tv": public_identity(snapshot), "profile_id": plan["profile"]["id"], "name": name,
                "batches": [], "changed": [], "skipped": [], "errors": [], "warnings": [],
                "before_digest": file_digest(folder / "before.json"),
                "summary": "Backup complete. Applying reviewed cleanup.", "needs_manual_check": True}
         self._checkpoint(run)
         return run, folder
 
-    def apply(self, plan_id, packages, enroll=False, *, _automatic=None):
+    def apply(self, plan_id, packages, enroll=False, name="", *, _automatic=None):
         lock = self._acquire_mutation()
         try:
-            return self._apply(plan_id, packages, enroll, _automatic)
+            return self._apply(plan_id, packages, enroll, _automatic, name)
         finally:
             self._release_mutation(lock)
 
-    def _apply(self, plan_id, packages, enroll, automatic=None):
+    def _apply(self, plan_id, packages, enroll, automatic=None, name=""):
         self._assert_automatic(automatic)
+        name = self._run_name(name)
         if not isinstance(enroll, bool):
             raise ServiceError("Automatic enrollment must be on or off.")
         self.verify_upstream()
@@ -360,7 +371,7 @@ class CleanerService:
                 raise ServiceError("This TV has an unfinished operation. Restore it before starting another cleanup.")
         plan["used"] = True
         atomic_json(self.plans_dir / f"{plan_id}.json", plan)
-        run, folder = self._new_run(plan, snapshot)
+        run, folder = self._new_run(plan, snapshot, name=name)
         try:
             for offset in range(0, len(ordered), 5):
                 self._assert_automatic(automatic)
@@ -439,11 +450,27 @@ class CleanerService:
         return self.public_run(run)
 
     def public_run(self, run):
-        return {k: run.get(k) for k in ("id", "created_at", "status", "kind", "tv", "summary", "changed", "skipped", "errors", "warnings", "needs_manual_check", "demo", "endpoint")}
+        return {k: run.get(k) for k in ("id", "created_at", "status", "kind", "tv", "name", "summary", "changed", "skipped", "errors", "warnings", "needs_manual_check", "demo", "endpoint")}
 
     def list_runs(self):
         runs = [read_json(path) for path in self.runs_dir.glob("*/run.json")]
         return {"runs": [self.public_run(run) for run in sorted(runs, key=lambda r: r["created_at"], reverse=True)[:100]]}
+
+    def rename_run(self, run_id, name):
+        if not re.fullmatch(r"[0-9a-f]{32}", str(run_id)):
+            raise ServiceError("Choose a saved restore record.")
+        name = self._run_name(name)
+        lock = self._acquire_mutation()
+        try:
+            run = read_json(self.runs_dir / run_id / "run.json")
+            if (not run or run.get("id") != run_id or run.get("demo") != self.demo
+                    or run.get("kind") != "cleanup"):
+                raise ServiceError("This restore record is unavailable in the current mode.")
+            run["name"] = name
+            self._checkpoint(run)
+            return self.public_run(run)
+        finally:
+            self._release_mutation(lock)
 
     def restore(self, run_id, endpoint):
         if not re.fullmatch(r"[0-9a-f]{32}", str(run_id)):

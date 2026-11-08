@@ -93,10 +93,16 @@ class WebTests(unittest.TestCase):
         self.assertEqual(inspection["identity"]["model"], "MiTV-MOOQ1")
         plan = self.job("/api/visit/plan", {"endpoint": endpoint, "profile_id": "xiaomi-mi-tv-4a/debloat.txt"})
         selected = [row["name"] for row in plan["packages"] if row["selected"]]
-        result = self.job("/api/visit/apply", {"plan_id": plan["id"], "packages": selected, "enroll": False})
+        result = self.job("/api/visit/apply", {"plan_id": plan["id"], "packages": selected, "enroll": False,
+                                                "name": "Living room TV"})
         self.assertEqual(result["status"], "completed")
+        self.assertEqual(result["name"], "Living room TV")
+        renamed = self.job("/api/visit/runs/name", {"run_id": result["id"], "name": "Den TV"})
+        self.assertEqual(renamed["name"], "Den TV")
+        self.assertEqual(self.request("/api/visit/runs")[1]["runs"][0]["name"], "Den TV")
         restored = self.job("/api/visit/restore", {"run_id": result["id"], "endpoint": endpoint})
         self.assertEqual(restored["status"], "restored")
+        self.assertEqual(restored["name"], "Den TV")
 
     def test_update_routes_on_both_pages(self):
         self.assertEqual(self.request("/api/visit/update/status")[1]["state"], "idle")
@@ -118,6 +124,9 @@ class WebTests(unittest.TestCase):
         networks = self.job("/api/visit/wifi/scan", {"interface": "wlan1"})
         self.assertEqual(networks["networks"][0]["ssid"], "Demo TV Wi-Fi")
         self.assertTrue(self.job("/api/visit/wifi/connect", {"interface": "wlan1", "ssid": "Demo TV Wi-Fi", "password": "examplepass"})["demo"])
+        disconnected = self.job("/api/visit/wifi/disconnect", {"interface": "wlan1"})
+        self.assertFalse(disconnected["uplink"]["connected"])
+        self.assertTrue(disconnected["ap"]["active"])
         self.assertEqual(self.request("/api/visit/wifi/ap", {"ssid": "PITV", "password": "pitv12345"}, origin="http://attacker.example")[0], 403)
 
     def test_complete_demo_api_workflow(self):

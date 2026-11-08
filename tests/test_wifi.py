@@ -117,6 +117,32 @@ class WifiTests(unittest.TestCase):
                     wifi._apply_profile(target, b"# Managed by PiTV. Configure this network in the PiTV web interface.\nnew", wifi.UPLINK_UUID, "wlan1", previous_connection="Prior TV")
             self.assertEqual(target.read_bytes(), old)
 
+    def test_disconnect_only_managed_usb_uplink_and_disables_reconnect(self):
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory) / "pitv-uplink.nmconnection"
+            target.write_bytes(wifi._profile(wifi.UPLINK_ID, wifi.UPLINK_UUID, "wlan1", "TV Wi-Fi", "private123"))
+            devices = {"wlan0": {"type": "wifi", "state": "connected", "connection": wifi.AP_ID},
+                       "wlan1": {"type": "wifi", "state": "connected", "connection": wifi.UPLINK_ID}}
+            with mock.patch.object(wifi, "UPLINK_FILE", target), \
+                    mock.patch.object(wifi, "_interface", return_value="wlan1"), \
+                    mock.patch.object(wifi, "_devices", return_value=devices), \
+                    mock.patch.object(wifi, "_nm", return_value="") as nm, \
+                    mock.patch.object(wifi, "_write_public") as public, \
+                    mock.patch.object(wifi, "status", return_value={"uplink": {"connected": False}}):
+                self.assertFalse(wifi.disconnect(Path(directory), "wlan1")["uplink"]["connected"])
+            self.assertIn(b"autoconnect=false", target.read_bytes())
+            self.assertIn(mock.call("connection", "down", "uuid", wifi.UPLINK_UUID), nm.call_args_list)
+            self.assertNotIn("wlan0", repr(nm.call_args_list))
+            public.assert_called_once_with(Path(directory), uplink_ssid="", uplink_interface="wlan1")
+
+    def test_disconnect_refuses_unmanaged_connection(self):
+        with mock.patch.object(wifi, "_interface", return_value="wlan1"), \
+                mock.patch.object(wifi, "_devices", return_value={"wlan1": {"state": "connected", "connection": "Other network"}}), \
+                mock.patch.object(wifi, "_nm") as nm:
+            with self.assertRaisesRegex(wifi.WifiError, "not connected through PiTV"):
+                wifi.disconnect(Path("/unused"), "wlan1")
+            nm.assert_not_called()
+
     def test_request_route_cannot_be_overridden_by_json_fields(self):
         with tempfile.TemporaryDirectory() as directory, mock.patch.object(wifi, "_interface", return_value="wlan1"):
             root = Path(directory)

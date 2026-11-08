@@ -53,13 +53,14 @@ http://<your-pi-hostname>.local/
 
 Use the Pi's numeric LAN address instead if `.local` discovery is unavailable. This is a local HTTP service for a trusted home network. Anyone who can reach the Pi on that network can operate the manual and advanced controls, including automatic mode. Do not forward its HTTP or ADB ports through the router.
 
-The collapsible **Wi-Fi relay** and **PITV network** sections sit under the two version cards.
+The collapsible **Wi-Fi relay** and **PITV network** sections sit under the two version cards and start closed.
 The built-in radio can broadcast `PITV` with initial password `pitv12345`, and
 the USB Wi-Fi adapter can join the TV's network. Both the access-point name and
 password can be changed in the page. The Pi shares internet by NAT and scans
 the upstream network for TVs. See the [Wi-Fi relay guide](docs/WIFI_RELAY.md) for
 setup and network limits. A fresh install or app update starts the access point
 when the built-in Wi-Fi radio is idle; an active built-in Wi-Fi connection is preserved.
+The relay has a **Disconnect USB Wi-Fi** button that leaves the PITV access point on.
 
 ## First visit to a television
 
@@ -69,7 +70,7 @@ when the built-in Wi-Fi radio is idle; an active built-in Wi-Fi connection is pr
 4. Scan the local subnet or enter the TV's private IPv4 address. Select the device and accept its debugging prompt. For wireless debugging, use **Pair** with the pairing port and six-digit code, then **Connect** with the separate connection port shown on the TV.
 5. Inspect the TV. Review the suggested profile, its Android version and its model/firmware notes. A match score is a suggestion, not validation that the entire list is appropriate.
 6. Review the packages. A small set of known telemetry/content-recognition packages is selected by default only when present in both the chosen list and the TV. Optional packages are not automatically selected. Core packages, active input and keyboard services, Home, setup, known updates/casting/voice services, user-installed apps and known streaming applications are protected.
-7. Press **Clean your TV** once after reviewing the selected packages. The controller re-reads the TV, records its original state, applies bounded batches through upstream tools and verifies package states and Home. A failure stops further cleanup and attempts restoration.
+7. Optionally name the restore record, for example **Living room TV**, then press **Clean your TV** once after reviewing the selected packages. The name can be edited later in Cleanup history. The controller re-reads the TV, records its original state, applies bounded batches through upstream tools and verifies package states and Home. A failure stops further cleanup and attempts restoration.
 8. Check Home, real remote buttons, HDMI/Live TV inputs, Wi-Fi, voice/casting and the apps the household uses. Turn debugging off after a one-time cleanup. You can take the Pi home; disabled packages remain on the TV until re-enabled or changed by an update/reset.
 
 The preserved-package policy is intentionally conservative. This release does not provide a switch that bypasses upstream core/Home guards. Some vendor-specific services remain optional and still need their notes reviewed.

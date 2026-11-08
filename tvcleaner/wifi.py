@@ -305,6 +305,33 @@ def connect(state, interface, ssid, password):
     return status(state)
 
 
+def disconnect(state, interface):
+    """Disconnect only the PiTV-managed USB uplink and disable its autoconnect."""
+    interface = _interface(interface)
+    device = _devices().get(interface, {})
+    if device.get("connection") != UPLINK_ID or device.get("state") != "connected":
+        raise WifiError("The selected USB adapter is not connected through PiTV.")
+    old = _read_managed(UPLINK_FILE)
+    if old is None:
+        raise WifiError("The PiTV USB Wi-Fi profile is missing. No connection was changed.")
+    changed = old.replace(b"autoconnect=true\n", b"autoconnect=false\n", 1)
+    if changed == old:
+        raise WifiError("The PiTV USB Wi-Fi profile needs review before disconnecting.")
+    _write_managed(UPLINK_FILE, changed)
+    try:
+        _nm("connection", "load", str(UPLINK_FILE))
+        _nm("connection", "down", "uuid", UPLINK_UUID)
+    except WifiError:
+        _write_managed(UPLINK_FILE, old)
+        try:
+            _nm("connection", "load", str(UPLINK_FILE))
+        except WifiError:
+            pass
+        raise
+    _write_public(state, uplink_ssid="", uplink_interface=interface)
+    return status(state)
+
+
 def configure_ap(state, ssid, password):
     ssid = _ssid(ssid)
     old = _read_managed(AP_FILE)
@@ -409,7 +436,12 @@ def request(state, action, payload=None, *, demo=False):
         if action == "connect":
             _ssid(payload.get("ssid"))
             _password(payload.get("password"))
-            atomic_json(Path(state) / "wifi-demo.json", {"uplink_ssid": payload["ssid"]})
+            current = read_json(Path(state) / "wifi-demo.json", {}) or {}
+            atomic_json(Path(state) / "wifi-demo.json", {**current, "uplink_ssid": payload["ssid"]})
+            return status(state, demo=True)
+        if action == "disconnect":
+            current = read_json(Path(state) / "wifi-demo.json", {}) or {}
+            atomic_json(Path(state) / "wifi-demo.json", {**current, "uplink_ssid": ""})
             return status(state, demo=True)
         if action == "ap":
             _ssid(payload.get("ssid"))
@@ -419,9 +451,9 @@ def request(state, action, payload=None, *, demo=False):
                         "ap_default_password": (payload["password"] == DEFAULT_PASSWORD if payload.get("password")
                                                 else current.get("ap_default_password", True))})
             return status(state, demo=True)
-    if action not in ("scan", "connect", "ap"):
+    if action not in ("scan", "connect", "disconnect", "ap"):
         raise WifiError("Unknown Wi-Fi operation.")
-    if action == "scan":
+    if action in ("scan", "disconnect"):
         _interface(payload.get("interface", ""))
     elif action == "connect":
         _interface(payload.get("interface", ""))
@@ -473,6 +505,8 @@ def worker(state=STATE):
             result = scan(value.get("interface"))
         elif action == "connect":
             result = connect(state, value.get("interface"), value.get("ssid"), value.get("password"))
+        elif action == "disconnect":
+            result = disconnect(state, value.get("interface"))
         elif action == "ap":
             result = configure_ap(state, value.get("ssid"), value.get("password", ""))
         else:
