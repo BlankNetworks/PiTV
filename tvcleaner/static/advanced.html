@@ -16,6 +16,7 @@
 @media(max-width:380px){.topbar-inner{height:auto;min-height:76px;flex-wrap:wrap;justify-content:flex-start;padding-top:11px;padding-bottom:11px}.topbar-inner>.row{width:100%;flex-wrap:wrap;padding-left:45px}.brand{min-width:0}.brand>div:last-child{min-width:0}.brand-title{overflow-wrap:anywhere}}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;transition:none!important}.spinner{animation:none;border-style:dotted}}
 .run-name-field{margin-top:17px}.run-name-field label{margin-bottom:6px}.run-name-form{margin-top:10px}.run-name-form .row{margin-top:8px;gap:8px;flex-wrap:wrap}.run-name-form button{flex:1}.run-name-form input{width:100%}.run .name-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+.ip-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;margin-bottom:22px}.ip-card{min-width:0;border:1px solid var(--line);border-radius:11px;background:var(--card);padding:10px 13px}.ip-card span{display:block;color:var(--muted);font-size:.74rem;font-weight:700}.ip-card strong{display:block;color:var(--accent);font-size:.92rem;overflow-wrap:anywhere}.trust-note{margin:17px 0 0;color:var(--muted);font-size:.8rem;text-align:center}
 </style>
 </head>
 <body>
@@ -31,7 +32,7 @@
 <main class="container">
  <div id="globalNotice" class="notice error" role="alert" hidden></div>
  <div id="app">
-  <div class="notice warn" style="margin-bottom:22px">Anyone on this reachable local network can use these controls, including automatic mode. Keep the Pi on a trusted network.</div>
+  <section class="ip-grid" aria-label="Pi network addresses"><div class="ip-card"><span>Pi LAN IP</span><strong id="piLanIp">Checking…</strong></div><div class="ip-card"><span>Pi Wi-Fi IP</span><strong id="piWifiIp">Checking…</strong></div></section>
   <section class="hero" aria-labelledby="heroTitle">
    <div><div class="eyebrow">Portable TV care</div><h1 id="heroTitle">Less clutter.<br>More of your TV.</h1><p>Find the TV, review a matching profile, and disable selected packages. Keep a restore record for every cleanup.</p></div>
    <div class="stats" aria-label="Available profile catalog"><div class="stat"><strong id="profileCount">—</strong><span>profiles</span></div><div class="stat"><strong id="brandCount">—</strong><span>brands</span></div></div>
@@ -104,6 +105,7 @@
    </aside>
   </div>
   <footer class="footer"><span>Local controls · Powered by CleanYourTV profiles</span><span id="versionLabel"></span></footer>
+  <p class="trust-note">PiTV should be used on a trusted local network.</p>
  </div>
 </main>
 <noscript><div class="container notice warn">Enable JavaScript to use the local TV controls.</div></noscript>
@@ -162,13 +164,13 @@
  function renderJourney(stage){for(let i=1;i<=3;i++)$('journey'+i).className=i<stage?'done':i===stage?'current':'';}
  function renderStatus(data){
   state.status=data;$('profileCount').textContent=text(data.catalog?.profiles,'—');$('brandCount').textContent=text(data.catalog?.brands,'—');$('demoBanner').hidden=!data.demo;$('demoPill').hidden=!data.demo;$('cleanButton').textContent=data.demo?'Simulate cleaning':'Clean your TV';$('versionLabel').textContent=data.version?'Version '+data.version:'';$('pitvVersion').textContent=data.version?'v'+data.version:'Unknown';const upstream=data.upstream||{};$('cleanYourTVVersion').textContent=upstream.tag||'Revision '+text(upstream.commit,'unknown').slice(0,8);$('cleanYourTVCommit').textContent=upstream.commit?'Pinned commit '+upstream.commit.slice(0,12):'Pinned catalog revision';
-  const networks=Array.isArray(data.networks)?data.networks:[];clear($('networkList'));for(const network of networks){const option=node('option','',network.interface||'Local network');option.value=network.cidr;$('networkList').append(option);}
+  const networks=Array.isArray(data.networks)?data.networks:[];const lan=networks.find(item=>item.interface==='eth0')||networks.find(item=>item.interface!=='wlan0'&&item.interface!=='lo');const wifi=networks.find(item=>item.interface==='wlan0');$('piLanIp').textContent=lan?.address||'Not connected';$('piWifiIp').textContent=wifi?.address||'Not active';clear($('networkList'));for(const network of networks){const option=node('option','',network.interface||'Local network');option.value=network.cidr;$('networkList').append(option);}
   const automatic=data.automatic||{};if(!state.autoDirty){$('autoEnabled').checked=!!automatic.enabled;$('autoSubnet').value=automatic.cidr||'';$('autoNetwork').value=automatic.network_mode||'manual';$('autoPolicy').value=automatic.policy||'enrolled';$('autoUsb').checked=automatic.usb!==false;}$('autoBadge').textContent=automatic.enabled?'Armed':'Off';$('autoBadge').className='pill'+(automatic.enabled?' good':'');
   const appliance=data.appliance||{};$('applianceStatus').textContent=(automatic.enabled?text(appliance.phase,'Waiting'):'Paused')+' · '+text(appliance.message);clear($('applianceResults'));for(const result of appliance.results||[])$('applianceResults').append(node('li','break',[result.endpoint,result.status,result.message||result.error].filter(Boolean).join(' · ')));renderRecipes(data.recipes||{});
   clear($('limitationList'));if(Array.isArray(data.limitations)&&data.limitations.length){const list=node('ul','plain-list');for(const item of data.limitations)list.append(node('li','',message(item)));$('limitationList').append(list);}
  }
  async function loadHistory(){const response=await api('/api/runs');state.runs=Array.isArray(response)?response:response.runs||[];renderHistory();}
- async function refreshStatus(){renderStatus(await api('/api/status'));}
+ async function refreshStatus(){renderStatus(await api('/api/status'));try{const wifi=await api('/api/wifi/status');if(wifi.ap?.active)$('piWifiIp').textContent=wifi.ap.address||'No IP assigned';}catch(_){} }
  async function initialize(){
   try{await refreshStatus();$('connectionText').textContent='Connected';$('connectionBadge').className='pill good';}
   catch(error){$('connectionText').textContent='Unavailable';notice(message(error));return;}

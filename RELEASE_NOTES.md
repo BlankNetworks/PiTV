@@ -1,3 +1,13 @@
+# 0.2.10 PiTV release
+
+Prepared November 8, 2026.
+
+- The Wi-Fi scan list marks the connected SSID with a **Connected** badge at the right. The badge follows live connection status when the list is open.
+- After **Connect Wi-Fi** succeeds, the Wi-Fi relay section closes and the main **Find TVs** step receives focus. The duplicate Find TVs button inside Wi-Fi relay was removed; that section now has only Connect Wi-Fi and Disconnect Wi-Fi actions.
+- Both pages show separate **Pi LAN IP** and **Pi Wi-Fi IP** addresses at the top. The long trusted-network and automatic-cleanup notices were removed from the guided page; a short trusted-network reminder is at the bottom of both pages.
+
+---
+
 # 0.2.9 PiTV release
 
 Prepared November 8, 2026.

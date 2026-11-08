@@ -33,17 +33,22 @@ on the PITV network does not need direct discovery of the TV.
    `ssh pi@pitv.local` login also remains available if you chose user `pi`.
 3. Plug in the USB Wi-Fi adapter. Expand **Wi-Fi relay**, select the USB adapter,
    and press **Scan nearby Wi-Fi**. Choose the TV's Wi-Fi name or type it if the
-   scan finds none, enter its password, and press **Connect USB Wi-Fi**. The page
-   reports scan and connection results beside those buttons. The password is transferred to the Pi's local
-   web service and stored in a root-only NetworkManager profile. It is not shown
-   again on the page or returned by the API.
-   When you are done with that network, press **Disconnect USB Wi-Fi**. This
+   scan finds none, enter its password, and press **Connect Wi-Fi**. The page
+   reports scan and connection results beside those buttons. A connected network
+   is marked **Connected** in the scan results. Once connected, PiTV closes the
+   Wi-Fi relay section and brings the main **Find TVs** step into view. The
+   password is transferred to the Pi's local web service and stored in a
+   root-only NetworkManager profile. It is not shown again on the page or
+   returned by the API.
+   When you are done with that network, press **Disconnect Wi-Fi**. This
    disconnects the PiTV-managed USB uplink and stops that saved uplink from
    reconnecting automatically. It does not turn off the PITV access point.
 4. Connect your phone or tablet to the Pi's access point. Press **Find TVs** in
-   the relay panel, or use the normal TV-finding step. PiTV scans up to four
+   the main TV-finding step. PiTV scans up to four
    connected private local /24 ranges, including the USB adapter's network. If
    the TV is not found, enter its debugging address manually or use pairing.
+   The top of the page shows separate Pi LAN and Pi Wi-Fi IP addresses. If a
+   connection is not active, its address is shown as unavailable.
 5. Review the matching profile and packages, then press **Clean your TV** once.
    Check the TV afterward and keep its restore record. Automatic TV cleanup
    remains off until a supervised cleanup and restore have been validated.

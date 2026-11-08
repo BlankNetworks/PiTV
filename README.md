@@ -60,7 +60,10 @@ password can be changed in the page. The Pi shares internet by NAT and scans
 the upstream network for TVs. See the [Wi-Fi relay guide](docs/WIFI_RELAY.md) for
 setup and network limits. A fresh install or app update starts the access point
 when the built-in Wi-Fi radio is idle; an active built-in Wi-Fi connection is preserved.
-The relay has a **Disconnect USB Wi-Fi** button that leaves the PITV access point on.
+The relay has a **Disconnect Wi-Fi** button that leaves the PITV access point on.
+The top of the page shows separate Pi LAN and Pi Wi-Fi IP addresses. A connected
+SSID is marked in scan results; connecting closes the relay section and puts
+the main **Find TVs** step in view.
 
 ## First visit to a television
 
