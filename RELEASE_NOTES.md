@@ -1,3 +1,11 @@
+# 0.2.6 PiTV release
+
+Prepared November 8, 2026.
+
+- The single-command SSH installation example allocates a terminal so `sudo` can ask for the Pi's own password on a fresh setup.
+
+---
+
 # 0.2.5 PiTV release
 
 Prepared November 8, 2026.

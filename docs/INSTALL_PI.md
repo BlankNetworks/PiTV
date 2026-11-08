@@ -34,7 +34,7 @@ f=$(mktemp) && curl -fsSL https://github.com/BlankNetworks/PiTV/releases/latest/
 Or run it directly from your computer without first opening an interactive Pi shell:
 
 ```bash
-ssh pi@pitv.local 'f=$(mktemp) && curl -fsSL https://github.com/BlankNetworks/PiTV/releases/latest/download/pitv-install.py -o "$f" && sudo python3 "$f"'
+ssh -t pi@pitv.local 'f=$(mktemp) && curl -fsSL https://github.com/BlankNetworks/PiTV/releases/latest/download/pitv-install.py -o "$f" && sudo python3 "$f"'
 ```
 
 Use your actual SSH name or IP in that command if different. The Pi needs
