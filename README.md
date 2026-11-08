@@ -18,7 +18,7 @@ A portable, local controller for the [CleanYourTV](https://github.com/Gathin23/c
 | Backups | Device properties, package states, settings and exact upstream restore records |
 | Changes | Disable selected packages for Android user 0, in batches of at most five |
 | Automatic visits | Enrolled devices or owner-verified exact firmware recipes |
-| Local operation | No AI subscription, cloud service, telemetry or runtime catalog download |
+| Local TV operation | Cleanup and restore stay on the LAN; release checks use public GitHub |
 
 All upstream lists, their alternate variants, notes and original tools are included under `vendor/cleanyourtv/`. The controller does not combine a manufacturer's different lists or try them successively against a television. It gathers evidence, ranks possible matches and uses the one the owner reviews.
 
@@ -32,22 +32,23 @@ The TV must offer debugging access and the owner must approve the Pi on the TV. 
 
 ## Prepare the Pi
 
-Use Raspberry Pi OS **64-bit**, preferably Lite, on a Pi 4. An existing suitable installation can be used; this installer does not reflash the SD card, change the Pi's hostname, reconfigure Wi-Fi or replace the router. Bring a proper Pi power supply. Ethernet to the home's router is the easiest way to get a headless Pi online.
+Use Raspberry Pi OS **64-bit**, preferably Lite, on a Pi 4. Follow the [first-install guide](docs/INSTALL_PI.md) to set the hostname, enable SSH, clone the public repo and run the installer once. The installer does not reflash the SD card, change the Pi's hostname, reconfigure Wi-Fi or replace the router. Bring a proper Pi power supply. Ethernet to the home's router is the easiest way to get a headless Pi online.
 
-Download and extract the source package on the Pi. You can transfer it using SFTP from a phone/tablet. From a terminal on the Pi, inside the extracted project folder:
+Clone the current stable tag on the Pi as described in the first-install guide.
+From a terminal on the Pi, inside that project folder:
 
 ```bash
 sudo bash scripts/install-pi.sh
 ```
 
-This installs Debian's native `adb`, Python and upstream Python dependencies; copies the project to `/opt/universal-tv-debloater`; creates the dedicated `tvcleaner` service account; and starts a systemd service on port 8080. Internet access is needed for this installation. The profiles and Python dependencies then remain local.
+This installs Debian's native `adb`, Python and upstream Python dependencies; copies the project to `/opt/universal-tv-debloater`; creates the dedicated `tvcleaner` service account; and starts a systemd service on port 80. Internet access is needed for this installation. The profiles and Python dependencies then remain local.
 
 The installer also configures the Pi to stay awake when idle. It disables systemd suspend and hibernation and masks their sleep targets. Normal manual reboot and shutdown still work. This cannot prevent a power failure or a deliberate shutdown by another privileged program.
 
-The generic installer prints an address on port 8080 and a legacy access token. This PiTV build does not ask for or require that token in either control page or API. On the configured PiTV appliance, open `http://pitv.local/` for the guided page or `http://pitv.local/advanced` for all controls. A fresh generic install opens:
+The installer does not ask for an access token in either control page or API. With hostname `pitv`, open `http://pitv.local/` for the guided page or `http://pitv.local/advanced` for all controls. Another hostname opens at:
 
 ```text
-http://<your-pi-hostname>.local:8080
+http://<your-pi-hostname>.local/
 ```
 
 Use the Pi's numeric LAN address instead if `.local` discovery is unavailable. This is a local HTTP service for a trusted home network. Anyone who can reach the Pi on that network can operate the manual and advanced controls, including automatic mode. Do not forward its HTTP or ADB ports through the router.
@@ -107,9 +108,10 @@ This controller disables selected packages. It does not guarantee removal of eve
 
 ## Update PiTV
 
-Use **Check for PiTV updates** on the main page to see the latest stable release
-from the public `BlankNetworks/PiTV` repo. Review the release notes, then choose
-**Install PiTV update**. The button updates the PiTV app and its pinned
+The Pi checks the latest stable release from the public `BlankNetworks/PiTV` repo
+after boot and about hourly. It installs a newer release automatically. Use
+**Check for PiTV updates** on the main page to inspect the release or install
+manually. Both paths update the PiTV app and its pinned
 CleanYourTV profile snapshot together. It does not install a TV manufacturer's
 firmware. Automatic TV cleanup stays off after an app update. See
 [updating](docs/UPDATING.md) for the release checks, recovery and manual ZIP path.

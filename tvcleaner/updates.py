@@ -119,7 +119,49 @@ def check(current_version=__version__, *, latest=None):
 
 def status(state):
     value = read_json(Path(state) / "update-status.json", default={"state": "idle"})
-    return value if isinstance(value, dict) else {"state": "idle"}
+    value = value if isinstance(value, dict) else {"state": "idle"}
+    automatic = read_json(Path(state) / "auto-update-check.json", default={})
+    return {**value, "automatic_updates": automatic if isinstance(automatic, dict) else {}}
+
+
+def auto_check(state=STATE):
+    """Check the fixed stable release feed and request at most three installs.
+
+    Runs as the unprivileged tvcleaner account. The existing root path worker
+    independently verifies and installs any request.
+    """
+    state = Path(state)
+    path = state / "auto-update-check.json"
+    previous = read_json(path, default={})
+    previous = previous if isinstance(previous, dict) else {}
+    now = time.time()
+    try:
+        release = fetch_latest()
+        if release is None or release["version_tuple"] <= _version(__version__):
+            result = {"state": "current", "checked_at": now, "installed_version": __version__}
+        elif (state / "update-request.json").exists() or status(state).get("state") in (
+                "requested", "downloading", "validating", "installing"):
+            result = {"state": "busy", "checked_at": now, "version": release["version"],
+                      "attempts": previous.get("attempts", 0) if previous.get("version") == release["version"] else 0}
+        else:
+            attempts = previous.get("attempts", 0) if previous.get("version") == release["version"] else 0
+            attempts = attempts if isinstance(attempts, int) and not isinstance(attempts, bool) else 0
+            if attempts >= 3:
+                result = {"state": "paused", "checked_at": now, "version": release["version"],
+                          "attempts": attempts, "message": "Three update attempts failed. A newer release or manual review is needed."}
+            else:
+                result = {"state": "requesting", "checked_at": now, "version": release["version"],
+                          "attempts": attempts + 1}
+                atomic_json(path, result)
+                request_install(state, release["version"], release["sha256"])
+                result["state"] = "requested"
+        atomic_json(path, result)
+        return result
+    except Exception as error:
+        atomic_json(path, {"state": "check_failed", "checked_at": now,
+                           "version": previous.get("version"), "attempts": previous.get("attempts", 0),
+                           "message": str(error)[:300]})
+        raise
 
 
 def request_install(state, version, sha256, *, demo=False):
@@ -222,6 +264,9 @@ def install_request(state=STATE):
 
 
 if __name__ == "__main__":
-    if sys.argv[1:] != ["install-request"]:
-        raise SystemExit("Usage: python3 -m tvcleaner.updates install-request")
-    install_request()
+    if sys.argv[1:] == ["install-request"]:
+        install_request()
+    elif sys.argv[1:] == ["auto-check"]:
+        auto_check()
+    else:
+        raise SystemExit("Usage: python3 -m tvcleaner.updates {install-request|auto-check}")

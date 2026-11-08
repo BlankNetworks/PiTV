@@ -5,15 +5,24 @@ validated cleanup recipes are ready. The update does not require reflashing the
 Pi's SD card. TV backups, recovery records, ADB keys, the legacy access file,
 enrollments and approved recipes stay in `/var/lib/tvcleaner/state`.
 
-PiTV has a **Check for PiTV updates** button on the main page. It checks only the
-latest stable release of `BlankNetworks/PiTV` on GitHub. When a newer version is
-available, the owner can review its notes and press **Install PiTV update**. A
+PiTV checks the latest stable release of `BlankNetworks/PiTV` on GitHub after boot
+and about hourly. When a newer version is available, the dedicated service account
+requests it through the same path as the **Install PiTV update** button. A
 root-owned local worker downloads the exact versioned ZIP from that repo,
 compares it to the SHA-256 reported by GitHub for the release asset, then uses
 the installed ZIP updater below. It cannot accept a browser-supplied URL or
-arbitrary local path. The update is never automatic, and it never installs TV
-firmware. Anyone who can reach this tokenless PiTV page on the trusted LAN can
-request an available PiTV update.
+arbitrary local path. The PiTV app update is automatic; TV cleanup remains off
+after updating. It never installs TV firmware. Anyone who can reach this tokenless
+PiTV page on the trusted LAN can also request an available PiTV update. Three failed
+automatic attempts for one release pause retries until a newer release or manual
+review. Network failures checking the release feed are retried on the next timer run.
+
+To publish a new release, edit and test the public repo, increase the literal
+version in `tvcleaner/__init__.py`, and put the matching version at the top of
+`RELEASE_NOTES.md`. Push to `main`. The GitHub Actions workflow runs the tests,
+builds and inspects a ZIP from that commit, then publishes it as the latest stable
+release. A push without a new version fails release publishing. No Git credential
+is stored on the Pi, and it does not run `git pull` after first installation.
 
 The GitHub asset digest detects a changed or incomplete download, but is not an
 independent publisher signature. The release repo account remains the trust

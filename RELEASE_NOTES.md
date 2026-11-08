@@ -1,3 +1,14 @@
+# 0.2.3 PiTV release
+
+Prepared November 8, 2026.
+
+- The Pi checks stable `BlankNetworks/PiTV` releases after boot and about hourly. It requests a newer release through the existing checksum-checked, rollback-capable updater. Three failed attempts for one version pause further automatic attempts until a newer release or manual review.
+- A GitHub Actions workflow tests and packages a versioned main-branch commit, then publishes the ZIP as a stable release. Bump the version and first release-notes heading with each publishable source update.
+- Fresh installation serves the browser page on port 80. Set the Pi hostname to `pitv` during initial OS setup for `http://pitv.local/`.
+- Automatic PiTV app updates are separate from automatic TV cleanup, which stays off after an update. The TV catalog and cleanup rules are unchanged.
+
+---
+
 # 0.2.2 PiTV release
 
 Prepared November 8, 2026.

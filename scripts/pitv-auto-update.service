@@ -1,0 +1,21 @@
+[Unit]
+Description=Check the public PiTV release feed
+After=network-online.target
+Wants=network-online.target
+ConditionPathExists=/opt/universal-tv-debloater/scripts/pitv-auto-update.service
+
+[Service]
+Type=oneshot
+User=tvcleaner
+Group=tvcleaner
+WorkingDirectory=/opt/universal-tv-debloater
+Environment=HOME=/var/lib/tvcleaner/state/home
+Environment=PYTHONDONTWRITEBYTECODE=1
+ExecStart=/opt/universal-tv-debloater/.venv/bin/python -m tvcleaner.updates auto-check
+TimeoutStartSec=60
+UMask=0077
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/var/lib/tvcleaner

@@ -45,6 +45,7 @@ FINAL_UPDATES = {"completed", "rolled_back", "aborted"}
 REQUIRED_FILES = {
     "UPSTREAM.json", "LICENSE", "README.md", "scripts/install-pi.sh",
     "scripts/pitv-update.service", "scripts/pitv-update.path",
+    "scripts/pitv-auto-update.service", "scripts/pitv-auto-update.timer",
     "scripts/pitv-logind.conf", "scripts/pitv-sleep.conf",
     "scripts/cli.py", "tvcleaner/__init__.py", "tvcleaner/__main__.py",
     "tvcleaner/service.py", "tvcleaner/transport.py", "tvcleaner/web.py",
@@ -406,10 +407,13 @@ class UpdatePaths:
     usb_rule: Path = Path("/etc/udev/rules.d/70-tvcleaner-adb.rules")
     update_service: Path = Path("/etc/systemd/system/pitv-update.service")
     update_path: Path = Path("/etc/systemd/system/pitv-update.path")
+    auto_update_service: Path = Path("/etc/systemd/system/pitv-auto-update.service")
+    auto_update_timer: Path = Path("/etc/systemd/system/pitv-auto-update.timer")
 
     def managed_files(self):
         return {"service": self.service_file, "wrapper": self.wrapper, "usb_rule": self.usb_rule,
-                "update_service": self.update_service, "update_path": self.update_path}
+                "update_service": self.update_service, "update_path": self.update_path,
+                "auto_update_service": self.auto_update_service, "auto_update_timer": self.auto_update_timer}
 
 
 def _disabled_config(state: Path) -> tuple[dict, bytes | None]:
@@ -514,6 +518,9 @@ class ReleaseUpdater:
 
     def _restore_managed(self, folder, record):
         for name, path in self.paths.managed_files().items():
+            # An older interrupted update may have recorded fewer managed units.
+            if name not in record["managed_files"]:
+                continue
             item = record["managed_files"][name]
             _no_symlink_parents(path)
             if item["exists"]:
@@ -597,6 +604,7 @@ class ReleaseUpdater:
         # Never replace code underneath a new service that could not be stopped.
         self._command(["systemctl", "stop", SERVICE])
         self._command(["systemctl", "stop", "pitv-update.path"], check=False)
+        self._command(["systemctl", "stop", "pitv-auto-update.timer"], check=False)
         previous = self.paths.application.with_name(".tvcleaner-previous-" + record["id"])
         failed = self.paths.application.with_name(".tvcleaner-failed-" + record["id"])
         if previous.exists():
@@ -619,6 +627,9 @@ class ReleaseUpdater:
         self._command(["systemctl", "enable" if record.get("was_update_path_enabled") else "disable", "pitv-update.path"], check=False)
         if record.get("was_update_path_active"):
             self._command(["systemctl", "start", "pitv-update.path"])
+        self._command(["systemctl", "enable" if record.get("was_auto_update_timer_enabled") else "disable", "pitv-auto-update.timer"], check=False)
+        if record.get("was_auto_update_timer_active"):
+            self._command(["systemctl", "start", "pitv-auto-update.timer"])
         self._command(["systemctl", "enable" if record["was_enabled"] else "disable", SERVICE])
         if record["was_active"]:
             self._command(["systemctl", "start", SERVICE])
@@ -656,6 +667,8 @@ class ReleaseUpdater:
                       "was_enabled": self._command(["systemctl", "is-enabled", "--quiet", SERVICE], check=False).returncode == 0,
                       "was_update_path_active": self._command(["systemctl", "is-active", "--quiet", "pitv-update.path"], check=False).returncode == 0,
                       "was_update_path_enabled": self._command(["systemctl", "is-enabled", "--quiet", "pitv-update.path"], check=False).returncode == 0,
+                      "was_auto_update_timer_active": self._command(["systemctl", "is-active", "--quiet", "pitv-auto-update.timer"], check=False).returncode == 0,
+                      "was_auto_update_timer_enabled": self._command(["systemctl", "is-enabled", "--quiet", "pitv-auto-update.timer"], check=False).returncode == 0,
                       "managed_files": self._backup_managed(folder), "automatic_enabled": False}
             self._journal(folder, record)
             staging_parent = Path(tempfile.mkdtemp(prefix=".tvcleaner-stage-", dir=self.paths.application.parent))

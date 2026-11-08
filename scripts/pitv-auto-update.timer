@@ -1,0 +1,11 @@
+[Unit]
+Description=Check PiTV releases after boot and hourly
+
+[Timer]
+OnActiveSec=5min
+OnUnitInactiveSec=1h
+RandomizedDelaySec=5min
+Unit=pitv-auto-update.service
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,50 @@
+name: Validate and publish PiTV
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pitv-release
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Install test dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y adb iproute2
+          python3 -m venv .ci-venv
+          .ci-venv/bin/pip install -r vendor/cleanyourtv/tools/requirements.txt
+      - name: Test and prepare release
+        run: |
+          .ci-venv/bin/python -m unittest discover -s tests -q
+          bash -n scripts/install-pi.sh scripts/update-pi.sh
+          .ci-venv/bin/python scripts/prepare-release.py --out-dir dist
+      - name: Publish latest stable release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ "$(gh api "repos/$GITHUB_REPOSITORY/commits/main" --jq .sha)" != "$GITHUB_SHA" ]; then
+            echo "A newer main commit exists; only that commit will be released."
+            exit 0
+          fi
+          version=$(.ci-venv/bin/python -c 'from tvcleaner import __version__; print(__version__)')
+          tag="v$version"
+          if git tag --list "$tag" | grep -q .; then
+            echo "Tag $tag already exists. Bump tvcleaner.__version__ and release notes before pushing."
+            exit 1
+          fi
+          gh release create "$tag" "dist/pitv-$tag.zip" --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" --title "PiTV $tag" --notes-file dist/release-notes.md --draft
+          gh release edit "$tag" --repo "$GITHUB_REPOSITORY" --draft=false --latest

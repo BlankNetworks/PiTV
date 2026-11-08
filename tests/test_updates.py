@@ -50,6 +50,31 @@ class UpdateTests(unittest.TestCase):
             with self.assertRaises(updates.UpdateError):
                 updates.request_install(directory, NEXT, "a" * 64, demo=True)
 
+    def test_automatic_check_requests_latest_stable_release_and_stops_after_three_failures(self):
+        item = updates._release(release())
+        with tempfile.TemporaryDirectory() as directory, patch.object(updates, "fetch_latest", return_value=item):
+            state = Path(directory)
+            for attempt in range(1, 4):
+                result = updates.auto_check(state)
+                self.assertEqual(result["state"], "requested")
+                self.assertEqual(result["attempts"], attempt)
+                self.assertEqual(updates.status(state)["automatic_updates"]["attempts"], attempt)
+                (state / "update-request.json").unlink()
+                updates.atomic_json(state / "update-status.json", {"state": "failed", "version": NEXT})
+            result = updates.auto_check(state)
+            self.assertEqual(result["state"], "paused")
+            self.assertFalse((state / "update-request.json").exists())
+
+    def test_automatic_check_skips_installed_version_and_pending_request(self):
+        item = updates._release(release())
+        with tempfile.TemporaryDirectory() as directory:
+            state = Path(directory)
+            with patch.object(updates, "fetch_latest", return_value=item), patch.object(updates, "__version__", NEXT):
+                self.assertEqual(updates.auto_check(state)["state"], "current")
+            with patch.object(updates, "fetch_latest", return_value=item):
+                (state / "update-request.json").write_text("{}")
+                self.assertEqual(updates.auto_check(state)["state"], "busy")
+
     def test_download_checks_published_digest_and_size(self):
         payload = b"checked PiTV release" * 50
         item = updates._release(release())

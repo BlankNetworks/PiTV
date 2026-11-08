@@ -340,7 +340,9 @@ class ReleaseUpdateTransactionTests(unittest.TestCase):
                                  service_file=self.root / "units/tvcleaner.service",
                                  wrapper=self.root / "bin/tvcleaner", usb_rule=self.root / "rules/70-tvcleaner-adb.rules",
                                  update_service=self.root / "units/pitv-update.service",
-                                 update_path=self.root / "units/pitv-update.path")
+                                 update_path=self.root / "units/pitv-update.path",
+                                 auto_update_service=self.root / "units/pitv-auto-update.service",
+                                 auto_update_timer=self.root / "units/pitv-auto-update.timer")
         self.paths.service_file.write_text("old service")
         self.paths.wrapper.write_text("old wrapper")
         self.config = {"automatic": {"enabled": True, "network_mode": "auto", "usb": True, "policy": "recipes", "cidr": ""},

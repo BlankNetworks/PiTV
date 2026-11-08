@@ -78,6 +78,8 @@ chmod 0644 /etc/udev/rules.d/70-tvcleaner-adb.rules
 udevadm control --reload-rules
 install -o root -g root -m 0644 "$INSTALL_DIR/scripts/pitv-update.service" /etc/systemd/system/pitv-update.service
 install -o root -g root -m 0644 "$INSTALL_DIR/scripts/pitv-update.path" /etc/systemd/system/pitv-update.path
+install -o root -g root -m 0644 "$INSTALL_DIR/scripts/pitv-auto-update.service" /etc/systemd/system/pitv-auto-update.service
+install -o root -g root -m 0644 "$INSTALL_DIR/scripts/pitv-auto-update.timer" /etc/systemd/system/pitv-auto-update.timer
 # The PiTV appliance must remain reachable when idle. Keep explicit policy
 # drop-ins so later package updates do not restore default sleep behavior.
 install -d -m 0755 /etc/systemd/logind.conf.d /etc/systemd/sleep.conf.d
@@ -101,7 +103,9 @@ Group=tvcleaner
 WorkingDirectory=/opt/universal-tv-debloater
 Environment=HOME=/var/lib/tvcleaner/state/home
 Environment=PYTHONDONTWRITEBYTECODE=1
-ExecStart=/opt/universal-tv-debloater/.venv/bin/python -m tvcleaner --state /var/lib/tvcleaner/state serve --host 0.0.0.0 --port 8080
+ExecStart=/opt/universal-tv-debloater/.venv/bin/python -m tvcleaner --state /var/lib/tvcleaner/state serve --host 0.0.0.0 --port 80
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE
 UMask=0077
 Restart=on-failure
 RestartSec=3
@@ -118,7 +122,8 @@ systemctl daemon-reload
 systemctl enable --now avahi-daemon
 systemctl enable --now pitv-update.path
 systemctl enable --now tvcleaner.service
-echo "Installed. Open http://$(hostname -s).local:8080 on your phone on the same home network."
+systemctl enable --now pitv-auto-update.timer
+echo "Installed. Open http://$(hostname -s).local/ on your phone on the same reachable local network."
 # The old local updater still checks access.json for compatibility with v0.2.0.
 # The web pages never require or display this token.
 /usr/local/bin/tvcleaner token >/dev/null
