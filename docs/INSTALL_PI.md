@@ -23,18 +23,27 @@ For an existing Raspberry Pi OS installation whose hostname is different, set it
 once with `sudo hostnamectl set-hostname pitv`, reboot, and reconnect. Do this only
 if `pitv` is not already in use on that local network.
 
-## 2. Install from the public repo
+## 2. Install with one command
 
-Run these commands in the Pi's terminal, replacing `v0.2.4` with the current
-stable tag shown on the [PiTV releases page](https://github.com/BlankNetworks/PiTV/releases):
+After SSH connects, paste this single command into the Pi's terminal:
 
 ```bash
-sudo apt-get update
-sudo apt-get install -y git
-git clone --depth 1 --branch v0.2.4 https://github.com/BlankNetworks/PiTV.git
-cd PiTV
-sudo bash scripts/install-pi.sh
+f=$(mktemp) && curl -fsSL https://github.com/BlankNetworks/PiTV/releases/latest/download/pitv-install.py -o "$f" && sudo python3 "$f"
 ```
+
+Or run it directly from your computer without first opening an interactive Pi shell:
+
+```bash
+ssh pi@pitv.local 'f=$(mktemp) && curl -fsSL https://github.com/BlankNetworks/PiTV/releases/latest/download/pitv-install.py -o "$f" && sudo python3 "$f"'
+```
+
+Use your actual SSH name or IP in that command if different. The Pi needs
+`curl`, Python 3, `sudo`, and outbound HTTPS to GitHub. The command downloads
+the installer asset from the **latest stable PiTV release**. That asset is built
+with the release ZIP's exact version and SHA-256. It downloads the matching ZIP,
+checks its hash and archive paths, then runs the bundled installer. It stops if
+PiTV is already present; use the web interface for later updates. You can
+inspect the downloaded `pitv-install.py` before running it if desired.
 
 The installer adds the native ADB and Python dependencies, the PiTV service,
 Avahi local-name discovery and hourly release checks. It disables idle sleep and
@@ -42,6 +51,11 @@ hibernation. The PiTV service starts on boot. The installer does not change SSH
 accounts, passwords, keys or SSH service settings, so your original SSH login
 continues to work. Keep the Pi powered and connected
 to the internet during this first installation.
+
+For a manual checkout instead, clone the current stable tag from the
+[PiTV releases page](https://github.com/BlankNetworks/PiTV/releases) and run
+`sudo bash scripts/install-pi.sh` from that checkout. The one-command path does
+not require Git to be installed on the Pi.
 
 ## 3. Open the interface
 

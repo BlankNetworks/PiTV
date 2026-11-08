@@ -1,0 +1,153 @@
+#!/usr/bin/env python3
+"""First-install launcher published beside one specific stable PiTV release.
+
+The release workflow fills the version and ZIP SHA-256 before uploading this file.
+It is for a fresh Pi only; installed PiTV appliances update through their service.
+"""
+
+import ast
+import hashlib
+import os
+from pathlib import Path
+import platform
+import re
+import shutil
+import stat
+import subprocess
+import sys
+import tempfile
+from urllib.parse import urlsplit
+from urllib.request import HTTPRedirectHandler, ProxyHandler, Request, build_opener
+import zipfile
+
+
+VERSION = "@PITV_VERSION@"
+SHA256 = "@PITV_SHA256@"
+REPOSITORY = "BlankNetworks/PiTV"
+ROOT = "universal-tv-debloater"
+MAX_ZIP = 128 * 1024 * 1024
+MAX_EXPANDED = 512 * 1024 * 1024
+MAX_MEMBER = 64 * 1024 * 1024
+MAX_ENTRIES = 16000
+REQUIRED = {"UPSTREAM.json", "scripts/install-pi.sh", "tvcleaner/__init__.py", "tvcleaner/service.py"}
+
+
+class InstallError(RuntimeError):
+    pass
+
+
+class GitHubRedirect(HTTPRedirectHandler):
+    def redirect_request(self, request, fp, code, message, headers, newurl):
+        parsed = urlsplit(newurl)
+        if parsed.scheme != "https" or parsed.hostname not in (
+            "github.com", "release-assets.githubusercontent.com", "objects.githubusercontent.com"
+        ):
+            raise InstallError("The release download redirected outside GitHub.")
+        return super().redirect_request(request, fp, code, message, headers, newurl)
+
+
+def download(archive):
+    url = f"https://github.com/{REPOSITORY}/releases/download/v{VERSION}/pitv-v{VERSION}.zip"
+    opener = build_opener(ProxyHandler({}), GitHubRedirect())
+    request = Request(url, headers={"User-Agent": "PiTV-first-install", "Accept": "application/octet-stream"})
+    digest = hashlib.sha256()
+    size = 0
+    with opener.open(request, timeout=30) as response, archive.open("wb") as target:
+        while chunk := response.read(1024 * 1024):
+            size += len(chunk)
+            if size > MAX_ZIP:
+                raise InstallError("The PiTV release ZIP is too large.")
+            digest.update(chunk)
+            target.write(chunk)
+    if not size or digest.hexdigest() != SHA256:
+        raise InstallError("The release ZIP did not match the published SHA-256. Nothing was installed.")
+    return url
+
+
+def _safe_path(name):
+    if (not name or name.startswith("/") or "\\" in name or ":" in name
+            or any(ord(char) < 32 or ord(char) == 127 for char in name)):
+        raise InstallError("The release ZIP contains an unsafe path.")
+    parts = name.split("/")
+    if any(part in ("", ".", "..") for part in parts):
+        raise InstallError("The release ZIP contains an unsafe path.")
+    if parts[0] != ROOT:
+        raise InstallError("The release ZIP contains a file outside its application directory.")
+    return "/".join(parts[1:])
+
+
+def inspect_and_extract(archive_path, destination):
+    with zipfile.ZipFile(archive_path) as archive:
+        entries = archive.infolist()
+        if not entries or len(entries) > MAX_ENTRIES:
+            raise InstallError("The release ZIP has an invalid entry count.")
+        names = set()
+        files = set()
+        expanded = 0
+        for entry in entries:
+            if entry.orig_filename != entry.filename:
+                raise InstallError("The release ZIP has a hidden filename terminator.")
+            directory = entry.is_dir()
+            raw = entry.filename[:-1] if directory else entry.filename
+            relative = _safe_path(raw)
+            folded = raw.casefold()
+            if folded in names:
+                raise InstallError("The release ZIP has duplicate paths.")
+            names.add(folded)
+            mode = entry.external_attr >> 16
+            kind = stat.S_IFMT(mode)
+            if (kind not in (0, stat.S_IFREG, stat.S_IFDIR) or mode & 0o7000
+                    or kind == stat.S_IFREG and directory or kind == stat.S_IFDIR and not directory
+                    or entry.flag_bits & 1 or entry.compress_type not in (zipfile.ZIP_STORED, zipfile.ZIP_DEFLATED)):
+                raise InstallError("The release ZIP has an unsafe entry type.")
+            if entry.file_size > MAX_MEMBER:
+                raise InstallError("The release ZIP has a file over the size limit.")
+            expanded += entry.file_size
+            if expanded > MAX_EXPANDED:
+                raise InstallError("The release ZIP exceeds the expanded size limit.")
+            if not directory:
+                files.add(relative)
+        if not REQUIRED <= files:
+            raise InstallError("The release ZIP is missing required PiTV files.")
+        source = archive.read(f"{ROOT}/tvcleaner/__init__.py")
+        if len(source) > 65536:
+            raise InstallError("The release version file is too large.")
+        try:
+            tree = ast.parse(source.decode("utf-8"))
+        except (SyntaxError, UnicodeError, ValueError) as error:
+            raise InstallError("The release version file is invalid.") from error
+        versions = [node.value.value for node in tree.body
+                    if isinstance(node, ast.Assign)
+                    and any(isinstance(target, ast.Name) and target.id == "__version__" for target in node.targets)
+                    and isinstance(node.value, ast.Constant) and isinstance(node.value.value, str)]
+        if versions != [VERSION]:
+            raise InstallError("The ZIP version does not match its installer.")
+        archive.extractall(destination)
+    return Path(destination) / ROOT
+
+
+def main():
+    if os.geteuid() != 0:
+        raise InstallError("Run this installer with sudo.")
+    if sys.platform != "linux" or platform.machine() != "aarch64" or not shutil.which("apt-get"):
+        raise InstallError("Use 64-bit Raspberry Pi OS on an ARM64 Raspberry Pi.")
+    if not re.fullmatch(r"\d+\.\d+\.\d+", VERSION) or not re.fullmatch(r"[0-9a-f]{64}", SHA256):
+        raise InstallError("This installer was not prepared by the PiTV release workflow.")
+    if Path("/opt/universal-tv-debloater").exists():
+        raise InstallError("PiTV is already present. Use Update PiTV in its web interface.")
+    with tempfile.TemporaryDirectory(prefix="pitv-first-install-") as directory:
+        archive = Path(directory) / f"pitv-v{VERSION}.zip"
+        print(f"Downloading PiTV v{VERSION} from the public GitHub release…", flush=True)
+        download(archive)
+        source = inspect_and_extract(archive, directory)
+        print("Release verified. Installing PiTV and its system packages…", flush=True)
+        subprocess.run(["bash", "scripts/install-pi.sh"], cwd=source, check=True)
+    print("PiTV is ready. Open http://pitv.local/ on the same reachable local network.")
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except (InstallError, OSError, zipfile.BadZipFile, subprocess.CalledProcessError) as error:
+        print(f"PiTV installation stopped: {error}", file=sys.stderr)
+        raise SystemExit(1)

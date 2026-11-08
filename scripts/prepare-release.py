@@ -30,6 +30,11 @@ def main():
     metadata = inspect_release(archive, digest)
     if metadata["version"] != __version__:
         raise SystemExit("The committed release version differs from the checkout.")
+    bootstrap = (root / "scripts/bootstrap-pi.py.in").read_text(encoding="utf-8")
+    if bootstrap.count("@PITV_VERSION@") != 1 or bootstrap.count("@PITV_SHA256@") != 1:
+        raise SystemExit("The Pi bootstrap template must have one version and one digest placeholder.")
+    rendered = bootstrap.replace("@PITV_VERSION@", __version__).replace("@PITV_SHA256@", digest)
+    (args.out_dir / "pitv-install.py").write_text(rendered, encoding="utf-8")
     (args.out_dir / "release-notes.md").write_text(notes + "\n", encoding="utf-8")
     (args.out_dir / "sha256.txt").write_text(f"{digest}  {archive.name}\n", encoding="utf-8")
     print(f"{tag} {archive} sha256:{digest}")

@@ -45,6 +45,6 @@ jobs:
             echo "Tag $tag already exists. Bump tvcleaner.__version__ and release notes before pushing."
             exit 1
           fi
-          gh release create "$tag" "dist/pitv-$tag.zip" --repo "$GITHUB_REPOSITORY" \
+          gh release create "$tag" "dist/pitv-$tag.zip" dist/pitv-install.py --repo "$GITHUB_REPOSITORY" \
             --target "$GITHUB_SHA" --title "PiTV $tag" --notes-file dist/release-notes.md --draft
           gh release edit "$tag" --repo "$GITHUB_REPOSITORY" --draft=false --latest

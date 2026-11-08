@@ -1,3 +1,13 @@
+# 0.2.5 PiTV release
+
+Prepared November 8, 2026.
+
+- The public GitHub About section now describes PiTV, links to the installation guide and tags the Raspberry Pi, Android TV and CleanYourTV project topics.
+- Every stable PiTV release now includes a small `pitv-install.py` asset. One pasted command downloads that asset on a fresh 64-bit Pi, verifies the matching release ZIP by SHA-256 and safe archive paths, and runs the existing installer. Later updates still arrive automatically through the PiTV release checker.
+- The first-install guide and README show the single command and a direct SSH variant. The installer preserves the owner's SSH and network setup and stops if PiTV is already present.
+
+---
+
 # 0.2.4 PiTV release
 
 Prepared November 8, 2026.

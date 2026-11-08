@@ -32,16 +32,15 @@ The TV must offer debugging access and the owner must approve the Pi on the TV. 
 
 ## Prepare the Pi
 
-Use Raspberry Pi OS **64-bit**, preferably Lite, on a Pi 4. Follow the [first-install guide](docs/INSTALL_PI.md) to set the hostname, enable SSH, clone the public repo and run the installer once. The installer does not reflash the SD card, change the Pi's hostname, reconfigure Wi-Fi or replace the router. Bring a proper Pi power supply. Ethernet to the home's router is the easiest way to get a headless Pi online.
+Use Raspberry Pi OS **64-bit**, preferably Lite, on a Pi 4. Follow the [first-install guide](docs/INSTALL_PI.md) to set hostname `pitv`, enable SSH, and choose a unique SSH password or key. The installer does not reflash the SD card, change the Pi's hostname, reconfigure Wi-Fi or replace the router. Bring a proper Pi power supply. Ethernet to the home's router is the easiest way to get a headless Pi online.
 
-Clone the current stable tag on the Pi as described in the first-install guide.
-From a terminal on the Pi, inside that project folder:
+After SSH connects, paste one command on the Pi:
 
 ```bash
-sudo bash scripts/install-pi.sh
+f=$(mktemp) && curl -fsSL https://github.com/BlankNetworks/PiTV/releases/latest/download/pitv-install.py -o "$f" && sudo python3 "$f"
 ```
 
-This installs Debian's native `adb`, Python and upstream Python dependencies; copies the project to `/opt/universal-tv-debloater`; creates the dedicated `tvcleaner` service account; and starts a systemd service on port 80. Internet access is needed for this installation. The profiles and Python dependencies then remain local.
+The GitHub-built installer verifies the exact stable release ZIP before setup. It installs Debian's native `adb`, Python and upstream Python dependencies; copies the project to `/opt/universal-tv-debloater`; creates the dedicated `tvcleaner` service account; and starts a systemd service on port 80. Internet access is needed for this installation. The profiles and Python dependencies then remain local.
 
 The installer also configures the Pi to stay awake when idle. It disables systemd suspend and hibernation and masks their sleep targets. Normal manual reboot and shutdown still work. This cannot prevent a power failure or a deliberate shutdown by another privileged program.
 
