@@ -260,14 +260,14 @@ class PinnedCatalogTests(unittest.TestCase):
 
     def test_complete_pinned_inventory(self):
         summary = self.catalog.summary()
-        self.assertEqual(summary["models"], 433)
-        self.assertEqual(summary["profiles"], 441)
-        self.assertEqual(summary["brands"], 114)
+        self.assertEqual(summary["models"], 442)
+        self.assertEqual(summary["profiles"], 450)
+        self.assertEqual(summary["brands"], 117)
         self.assertEqual(summary["variants"], 8)
-        self.assertEqual(summary["usable_profiles"], 441)
+        self.assertEqual(summary["usable_profiles"], 450)
         self.assertEqual(summary["unusable_profiles"], 0)
         self.assertEqual(summary["warnings"], [])
-        self.assertEqual(len(self.catalog.list_profiles()), 441)
+        self.assertEqual(len(self.catalog.list_profiles()), 450)
 
     def test_each_list_has_exact_source_digest_and_unique_packages(self):
         for metadata in self.catalog.list_profiles():

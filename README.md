@@ -8,11 +8,11 @@ A portable, local controller for the [CleanYourTV](https://github.com/Gathin23/c
 
 | Item | This release |
 | --- | --- |
-| TV/model entries | 433 |
-| Cleanup lists, including alternatives | 441 |
-| Brands in the upstream catalog | 114 |
-| Unique package names in active lists | 1,764 |
-| Upstream revision | `04aec4b7c763ed642d3994d25e5b89dd57014a6d` |
+| TV/model entries | 442 |
+| Cleanup lists, including alternatives | 450 |
+| Brands in the upstream catalog | 117 |
+| Unique package names in active lists | 1,767 |
+| Upstream revision | `fc148d5a9707b30e8f49f489625947421740dc55` (CleanYourTV v3.4.0) |
 | Control interface | Local phone/tablet browser, plus a terminal CLI |
 | Discovery | Connected private IPv4 networks, wireless-debugging advertisements and USB ADB enumeration |
 | Backups | Device properties, package states, settings and exact upstream restore records |

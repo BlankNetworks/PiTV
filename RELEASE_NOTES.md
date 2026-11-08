@@ -6,6 +6,7 @@ Prepared November 7, 2026.
 - Manual cleanup remains reviewed and reversible; automatic cleanup is off by default.
 - **Check for PiTV updates** button checks only stable `BlankNetworks/PiTV` releases. A confirmed update downloads the exact versioned ZIP, checks GitHub's published SHA-256, and uses the existing rollback-capable local updater. This updates the app and pinned debloat profiles, not TV firmware.
 - Raspberry Pi ADB daemon startup fix uses the private loopback port 5038.
+- Pins the CleanYourTV v3.4.0 source and debloat catalog: 442 models, 450 usable profiles and 117 brands. Existing owner-approved exact firmware recipes tied to the older source commit will need new supervised validation before automatic use.
 - No physical TV cleanup or restore has been validated yet.
 
 ---

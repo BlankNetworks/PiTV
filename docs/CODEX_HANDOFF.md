@@ -9,7 +9,7 @@ GOAL
 Build a portable, headless appliance. After initial TV authorization, I want to power the Pi, connect it over a supported LAN or USB link, have it identify the exact TV/firmware, apply a verified cleanup automatically, and move on. Normal visits must not require a laptop, Codex or an open browser. I will request updates as TV support grows.
 
 SOURCE AND CURRENT STATE
-Use the attached/extracted universal-tv-debloater v0.2.0 development package. Compare and preserve existing local changes. Upstream is https://github.com/Gathin23/cleanyourtv, pinned at 04aec4b7c763ed642d3994d25e5b89dd57014a6d. Cloning upstream alone does not include this companion app.
+This file records the original v0.2.0 installation handoff. For current PiTV releases and updates, use the repository README and docs/UPDATING.md. The current upstream source is pinned in UPSTREAM.json. Cloning CleanYourTV alone does not include this companion app.
 Read README.md, RELEASE_NOTES.md, ARCHITECTURE.md and docs/RECIPES.md, UPDATING.md, DIRECT_LAN.md, HARDWARE_VALIDATION.md and COMPATIBILITY.md.
 Implemented source includes network/USB ADB discovery, phone UI, systemd installer, backups/restore, exact firmware recipes, headless automation and a reviewed-release updater. Direct Pi-to-TV Ethernet addressing is unfinished. No preapproved hardware recipes are bundled. Development tests use simulations; the chat workspace did not install or validate a physical Pi or TV.
 
