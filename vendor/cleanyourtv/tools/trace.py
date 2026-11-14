@@ -10,10 +10,10 @@ tools/trace.md first: it says which scenario to use and what can mislead.
 Recording needs nothing beyond tools/requirements.txt; the perfetto client already ships on Android 9
 and later. Set TV_HOST to the TV's IP (and TV_PORT if it is not 5555). Usage:
 
-    tools/trace.py home --runs 5 --out traces/before
-    tools/trace.py cold|coldsys|home|nav --runs N --out DIR [--package PKG] [--app COMPONENT]
-    tools/trace.py custom --setup 'input keyevent KEYCODE_HOME' --setup 'sleep 2' \\
-                          --step 'input keyevent KEYCODE_DPAD_RIGHT' --step 'sleep 1' --out DIR
+    tools/venv/bin/python -I tools/trace.py home --runs 5 --out traces/before
+    tools/venv/bin/python -I tools/trace.py cold|coldsys|home|nav --runs N --out DIR [--package PKG] [--app COMPONENT]
+    tools/venv/bin/python -I tools/trace.py custom --setup 'input keyevent KEYCODE_HOME' --setup 'sleep 2' \
+                                         --step 'input keyevent KEYCODE_DPAD_RIGHT' --step 'sleep 1' --out DIR
 
 --out DIR is the folder the traces go into; it is created if it is not there. A file where the folder
 goes, a path through a file, and an empty --out are refused as argument errors (exit 2) before the TV is
@@ -26,7 +26,8 @@ file or passes through one, an empty --out, a --package or --app that is not one
 and a TV that cannot be reached - tools/tv.py's own sentence is printed, whether it refused the target as
 it was imported (no TV_HOST, a TV_PORT that is not a port number) or connect_error() worded the failure -
 both judged before anything is recorded, so nothing was written and --out was not made; 1 a recording that
-started and then failed.
+started and then failed. A recording still running after 60 completion checks is not pulled or published;
+any previous local trace is kept, and the remote recording is left alone.
 
 Scenarios (setup runs before the recording starts, so it stays out of the trace):
     cold     another app in front, the launcher force-stopped, then started with `am start -W`
@@ -199,6 +200,8 @@ def record_one(dev, setup, steps, package, out_path, run_shell=None):
         if run_shell(alive).strip() != "running":
             break
         time.sleep(1)
+    else:
+        raise RuntimeError("perfetto is still running after the completion wait; no trace was pulled")
     # A failed or empty pull must not truncate an earlier recording. Stage on the same filesystem so
     # the completed trace replaces it only after the download and remote cleanup both succeed.
     folder, name = os.path.split(os.path.abspath(out_path))
