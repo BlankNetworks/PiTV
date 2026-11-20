@@ -29,7 +29,9 @@ TV_HOST=<tv ip> tools/venv/bin/python -I tools/trace.py home --runs 5 --out trac
 ```
 
 `--out` is the folder the traces are written into, and it is created if it is not there. A file where the
-folder goes, a path through a file and an empty `--out` are refused before the TV is asked anything.
+folder goes, a path through a file, an empty `--out` and a name the filesystem will not look at (one longer
+than the filesystem allows for a name, or one under a folder this user may not open) are refused before the
+TV is asked anything.
 
 A TV that cannot be reached stops the run with `tools/tv.py`'s sentence - a port that refuses, a Wireless
 debugging port that asks for TLS, an address nothing answers on, or, before the TV is asked anything at
@@ -45,6 +47,11 @@ Nothing was recorded, so nothing is half-written: `tools/bench.py`, `tools/check
 | `nav` | 24 D-pad moves, 0.35 s apart | Focus, scrolling, drawing |
 | `custom` | `--step CMD` (repeatable) after `--setup CMD` | Anything else; `sleep N` steps set the length |
 
+Keep delays in standalone literal `sleep` steps, such as `--step 'sleep .5'` or
+`--step 'sleep "0.5s"'`. Whitespace, quoted numbers and the `s`, `m`, `h`, `d` suffixes are counted
+in the recording length and waited on this computer. A variable or compound shell command is sent
+unchanged to the TV; its running time cannot be inferred, so keep its waits in separate literal steps.
+
 - **Output:** each run writes `<scenario>-<n>.pftrace` (10–20 MB) and a `.json` with the commands and the
   TV's model and build. `traces/` is gitignored.
 - **The other app:** `--app package/activity`, or by default the TV's Settings. Both this tool and
@@ -56,6 +63,27 @@ Nothing was recorded, so nothing is half-written: `tools/bench.py`, `tools/check
   which one the report reads, so a fork has to pass it to `trace.py`, `trace_report.py` and
   `flamechart.py` alike: with the wrong name the report prints `–` for every step instead of saying the
   package was not in the trace, and the chart stops at `no <package> process in the trace`.
+
+## When a recording fails
+
+Each message below stops the run where it failed, with exit 1: the runs already recorded stay in
+`--out`, the failed one is not written there, and an earlier `<scenario>-<n>.pftrace` at that path is
+kept - a pull is staged in a temporary folder beside it and only a trace with something in it replaces
+the file. Each message is the last line of the run's traceback.
+
+- **`perfetto did not start on the TV (it ships with Android 9 and later): <the TV's answer>`** - the
+  launch came back with `not found`, `inaccessible` or an error, quoted after the colon. Android 8 and
+  older have no perfetto, and on 9 and 10 the TV's tracing services are off until they are enabled
+  ([Setup](#setup)); the tool does not change that setting.
+- **`perfetto is still running after the completion wait; no trace was pulled`** - the trace config's
+  own duration ends the recording, and it had not 60 s after the last step. Nothing was pulled, the file
+  at that path is an earlier run's or none, and the recording on the TV is left alone.
+- **`perfetto wrote an empty trace; run with --runs 1 and see tools/trace.md`** - perfetto started (its
+  answer is read first) and the file it wrote held no data, so the pull was discarded, the file at that
+  path kept and the TV's copy removed. `--runs 1` records a single trace, so the failure is that one
+  run's and not one of a set. Two things to check: the tracing services on Android 9 and 10
+  ([Setup](#setup)), and the length of the recording, which is 3 s before the first step, the `sleep`s
+  in the step list and 2 s after it - so a `custom` run whose steps hold no `sleep` records for about 5 s.
 
 ## Report
 

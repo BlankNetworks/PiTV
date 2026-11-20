@@ -39,15 +39,18 @@
 #   launcherx and setupwraith enabled), or re-enable setupwraith after each boot, wait a minute for
 #   "Created singleton instance of ClientAuthSigner" in logcat, then disable it again - the receiver
 #   holds the credentials in memory, so casting works until the next reboot
-#   (docs/TROUBLESHOOTING.md, "Casting fails with Untrusted device").
+#   (docs/TROUBLESHOOTING.md#connecting, the "Untrusted device" bullet after setupwraith is disabled).
 #   Seen again after a reboot: re-enabling setupwraith brought no ClientAuthSigner line within 3 minutes
 #   and phones did not list the device at all. Restart the receiver while setupwraith is enabled:
 #     pm enable com.google.android.tungsten.setupwraith
 #     logcat -c
-#     am crash com.google.android.apps.mediashell
+#     am crash $(pidof com.google.android.apps.mediashell)
 #   The system starts it again with a new pid, and "Created singleton instance of ClientAuthSigner"
 #   follows within seconds. Check that pid (pidof com.google.android.apps.mediashell) is still the same
 #   30 s later, then: pm disable-user --user 0 com.google.android.tungsten.setupwraith
+#   Crash it by pid, not by package name: am crash com.google.android.apps.mediashell hit one of the
+#   receiver's helper processes (:privileged_process1) and left the receiver running with its old pid,
+#   so the pid check above passed with no restart. The pid has to change after the crash.
 #   Not am force-stop plus am start-foreground-service: started that way the receiver never calls
 #   startForeground(), Android kills it after 30 s, and the copy that comes back with setupwraith
 #   already off has no credentials (the signer line came from the killed process) (#2615).

@@ -22,6 +22,21 @@ if (-not $TvHost) { throw 'pass -TvHost <tv ip> or set $env:TV_HOST' }
 $env:TV_HOST = $TvHost
 Set-Location $PSScriptRoot
 
+$py = '..\tools\venv\Scripts\python.exe'
+# No venv yet: say how to make one, as build-and-install.sh does, instead of building first and then failing
+# on "python.exe is not recognized" (#1142, #3187).
+if (-not (Test-Path $py)) { throw 'run: py -3 -m venv tools\venv; tools\venv\Scripts\pip install -r tools\requirements.txt (from the repo root). Nothing was built or sent to the TV.' }
+# Below minSdk, pm install refuses the APK with INSTALL_FAILED_OLDER_SDK, and only after Gradle has built it
+# and b64push has pushed it (#576). Ask the TV first; the number comes from app\build.gradle (#3187).
+$minSdk = Select-String -Path 'app\build.gradle' -Pattern '^\s*minSdk\s+(\d{1,3})\s*$' -ErrorAction SilentlyContinue |
+    Select-Object -First 1 | ForEach-Object { [int]$_.Matches[0].Groups[1].Value }
+$ErrorActionPreference = 'Continue'
+$tvSdk = "$(@(& $py -I ..\tools\tv.py 'getprop ro.build.version.sdk' 2>$null) -join '')" -replace '[^0-9]', ''
+$ErrorActionPreference = 'Stop'
+if ($minSdk -and $tvSdk -and [int]$tvSdk -lt $minSdk) {
+    throw "this TV runs SDK $tvSdk and the launcher is built with minSdk $minSdk (app\build.gradle), so pm install would answer INSTALL_FAILED_OLDER_SDK. Nothing was built, pushed or disabled. The debloat half of the repo still applies to that set; the launcher half would need your own build with a lower minSdk (docs/TROUBLESHOOTING.md)."
+}
+
 # SKIP_BUILD=1 installs the APK already built (tools\docker-build.ps1 builds it in Docker, with no JDK here).
 if ($env:SKIP_BUILD -ne '1') {
     if (-not $env:JAVA_HOME -or -not (Test-Path "$env:JAVA_HOME\bin\java.exe")) {
@@ -41,7 +56,6 @@ if ($env:SKIP_BUILD -ne '1') {
     throw 'SKIP_BUILD=1 but there is no app\build\outputs\apk\release\app-release.apk; build it first (tools\docker-build.ps1)'
 }
 
-$py = '..\tools\venv\Scripts\python.exe'
 # Which app owns Home differs by build; ask the TV, but only accept a launcher we recognise (the answer
 # can also be Android's chooser "android", the setup wizard, or another third-party launcher).
 # ColorOS TV's com.heytap.tv.launcher stays out of the list below: recognising it would disable
@@ -61,9 +75,22 @@ if (-not $StockLauncher) {
         if ($LASTEXITCODE -ne 0) { throw 'could not query Home claimants; stock launcher was left untouched' }
         $found = @($knownStock | Where-Object { $claimants -match ([regex]::Escape($_) + '/') })
         if ($found.Count -eq 1) { $StockLauncher = $found[0]; Write-Host "Home is Android's chooser; the stock launcher among the candidates is $StockLauncher." }
-        else { throw "Home is Android's launcher chooser and $($found.Count) known stock launchers claim Home: pick a default on the TV first, or run again with -StockLauncher <package to disable> or -StockLauncher none." }
+        else {
+            # Name the TV's actual HOME claimants so the message lists the packages that could be passed
+            # as -StockLauncher, matching build-and-install.sh (#3471).
+            $candidates = (($claimants -split "`n") | ForEach-Object { if ($_ -match '([A-Za-z0-9_.]+)/') { $Matches[1] } } | Sort-Object -Unique) -join ' '
+            throw "Home is Android's launcher chooser and $($found.Count) known stock launchers claim Home: pick a default on the TV first, or run again with -StockLauncher <package to disable> or -StockLauncher none.`nHOME candidates on this TV: $candidates"
+        }
     }
-    else { throw "Home currently resolves to '$homePkg', which is not a stock launcher this script knows (android = launcher chooser, com.google.android.tungsten.setupwraith = setup wizard, see README Troubleshooting; anything else = another launcher is the default). Run again with -StockLauncher <package to disable> or -StockLauncher none." }
+    else {
+        # List the TV's actual HOME claimants so the message names the packages that could be passed as
+        # -StockLauncher, instead of leaving the reader to find them by hand (#3471).
+        $candidatesRaw = (& $py -I ..\tools\tv.py 'cmd package query-activities --brief -a android.intent.action.MAIN -c android.intent.category.HOME') -join "`n"
+        $candidates = if ($LASTEXITCODE -eq 0) { (($candidatesRaw -split "`n") | ForEach-Object { if ($_ -match '([A-Za-z0-9_.]+)/') { $Matches[1] } } | Sort-Object -Unique) -join ' ' } else { '' }
+        $msg = "Home currently resolves to '$homePkg', which is not a stock launcher this script knows (android = launcher chooser, com.google.android.tungsten.setupwraith = setup wizard, see README Troubleshooting; anything else = another launcher is the default)."
+        if ($candidates) { $msg += "`nHOME candidates on this TV: $candidates" }
+        throw "$msg`nRun again with -StockLauncher <package to disable> or -StockLauncher none."
+    }
 }
 Write-Host "Stock launcher: $StockLauncher"
 $disableStock = if ($StockLauncher -eq 'none') { 'echo stock launcher left alone' } else { "pm disable-user --user 0 $StockLauncher" }
@@ -73,17 +100,19 @@ $apk = 'app\build\outputs\apk\release\app-release.apk'
 if ($LASTEXITCODE -ne 0) { throw 'APK upload failed' }
 $out = & $py -I ..\tools\tv.py 'pm install -r /data/local/tmp/tvhome.apk; rm -f /data/local/tmp/tvhome.apk'
 Write-Host $out
+if ("$out" -match 'INSTALL_FAILED_OLDER_SDK') {
+    # The preflight above missed it (getprop did not answer, or an APK built elsewhere): name the real cause.
+    throw "pm install refused the APK as too new for this set (INSTALL_FAILED_OLDER_SDK): the TV runs an older SDK than the launcher's minSdk $(if ($minSdk) { $minSdk } else { 'in app\build.gradle' }). The stock launcher was left untouched; see docs/TROUBLESHOOTING.md."
+}
 if ($LASTEXITCODE -ne 0 -or "$out" -notmatch 'Success') { throw 'pm install failed; the stock launcher was left untouched' }
 # Stop the instance Android restarted mid-update, which can come up non-occluding (see build-and-install.sh,
 # #1101), and write back a key helper the force stop took off the list. Through stdin: Windows PowerShell 5.1
 # drops the inner double quotes from a native argument.
 's=$(settings get secure enabled_accessibility_services); a=$(settings get secure accessibility_enabled); am force-stop com.gathin.tvhome; case "$s" in *com.gathin.tvhome*) settings put secure enabled_accessibility_services ""; settings put secure enabled_accessibility_services "$s"; settings put secure accessibility_enabled "$a" ;; esac' |
     & $py -I ..\tools\tv.py --batch | Out-Null
-# Android 9 only accepts a component here; Android 10+ also takes a bare package name.
-$out = & $py -I ..\tools\tv.py 'cmd package set-home-activity --user 0 com.gathin.tvhome/.MainActivity'
-Write-Host $out
-if ($LASTEXITCODE -ne 0 -or "$out" -match 'Error') { throw 'could not set the new launcher as home; the stock launcher was left untouched' }
-# Start the launcher on its own, before the stock Home is touched (see build-and-install.sh, #239):
+# Start the launcher on its own, before Home or the stock launcher is touched (see build-and-install.sh, #239):
+# Home moves to it only in the batch below, after this start check passed, so a launcher that does not
+# start is never left as Home (#3187). Android 9 only accepts a component for set-home-activity.
 # in the batch a failed start only prints an Error line and the stock launcher would be disabled anyway.
 # With -StockLauncher none the stock launcher stays Home (stock_home_redirect): a MAIN+HOME start would make this
 # launcher the home process until a restart, and Android then blocks the stock launcher's button launches (#1274).
@@ -95,12 +124,18 @@ if ($LASTEXITCODE -ne 0 -or $start -notmatch 'Status: ok' -or $start -match '(?m
 @(
     'pm grant com.gathin.tvhome android.permission.ACCESS_FINE_LOCATION 2>/dev/null; echo location-granted',
     'cmd package compile -m speed -f com.gathin.tvhome',
-    $disableStock,
-    'cmd package set-home-activity --user 0 com.gathin.tvhome/.MainActivity'
+    $disableStock
 ) | & $py -I ..\tools\tv.py --batch
 # A failed batch is not fatal here: the stock launcher may already be disabled, so fall through to the
 # Home check, which rolls back when Home is not ours.
 if ($LASTEXITCODE -ne 0) { Write-Warning "tv.py --batch failed (exit code $LASTEXITCODE); checking where Home ended up" }
+
+# set-home-activity on its own, so its result is read (build-and-install.sh does the same): our
+# launcher is a HOME candidate whenever it is installed, so the chooser check below cannot tell a
+# switch that took from one that did not on its own (#4068). It prints "Success" when the preference
+# took; anything else means it did not.
+$setHomeOut = (& $py -I ..\tools\tv.py 'cmd package set-home-activity --user 0 com.gathin.tvhome/.MainActivity' 2>$null) -join "`n"
+$setHomeOk = ($LASTEXITCODE -eq 0 -and $setHomeOut -match 'Success')
 
 $homeQuery = 'cmd package resolve-activity --brief -a android.intent.action.MAIN -c android.intent.category.HOME'
 # Home's owner, or '' when the TV cannot be reached: $null.Trim() would throw past the rollback.
@@ -144,6 +179,16 @@ function Undo-Handover {
 # Order matters, see build-and-install.sh: start the new launcher, disable the stock one, set the
 # preference last, then check where Home ended up and put the stock launcher back if it is not ours.
 $homeNow = Get-HomeNow
+# A second launcher (e.g. Projectivy) can keep claiming Home, so resolve-activity answers with the
+# chooser ("android") even though set-home-activity took. Keep the handover only when set-home-activity
+# reported Success and our launcher is among the claimants; otherwise fall through to the rollback (#4068).
+if ($homeNow -eq 'android' -and $setHomeOk) {
+    $claimants = (& $py -I ..\tools\tv.py 'cmd package query-activities --brief -a android.intent.action.MAIN -c android.intent.category.HOME') -join "`n"
+    if ($claimants -match 'com\.gathin\.tvhome/') {
+        $homeNow = 'com.gathin.tvhome/chooser'
+        Write-Host "Home is Android's chooser; set-home-activity reported Success and com.gathin.tvhome is a registered HOME candidate (a second launcher also claims Home), so the handover is kept."
+    }
+}
 if ($homeNow -notlike 'com.gathin.tvhome/*') {
     $reason = if ($homeNow) { "Home resolves to '$homeNow', not to the new launcher" } else { 'the TV stopped answering while Home was being switched, so the outcome is unknown' }
     $restored = Undo-Handover

@@ -12,6 +12,7 @@ Run from the repository root: python3 -m unittest discover -s tests -v
 """
 import base64
 import contextlib
+import errno
 import hashlib
 import importlib.util
 import io
@@ -106,6 +107,19 @@ class ScenarioTest(unittest.TestCase):
         self.assertEqual(trace.recording_ms(["input keyevent KEYCODE_HOME", "sleep 4"]),
                          (trace.START_MARGIN_S + 4 + trace.END_MARGIN_S) * 1000)
 
+    def test_recording_counts_literal_sleep_spellings(self):
+        for command, milliseconds in (("sleep  \t4", 4000), ("sleep .5", 500),
+                                      ("sleep 4.", 4000), ("sleep '+4e0'", 4000),
+                                      ('sleep "4s" # wait', 4000), ("sleep .5m", 30000),
+                                      ("sleep .5h", 1800000), ("sleep .5d", 43200000),
+                                      ("sleep 0", 0)):
+            with self.subTest(command=command):
+                self.assertEqual(trace.recording_ms([command]), 5000 + milliseconds)
+
+    def test_recording_rounds_up_to_cover_fractional_milliseconds(self):
+        self.assertEqual(trace.recording_ms(["sleep .0001"]), 5001)
+        self.assertEqual(trace.recording_ms(["sleep 0.35"] * 24), 13400)
+
     def test_config_traces_the_launcher_for_that_long(self):
         self.assertEqual(trace.perfetto_config("com.gathin.tvhome", 9000), CONFIG_9000)
 
@@ -146,6 +160,32 @@ class ArgumentTest(unittest.TestCase):
             self.assertIn("passes through the file", err)
         self.assertIn("--out is empty", self.parse_error(["home", "--out", ""]))
 
+    def test_an_out_the_filesystem_will_not_look_at_is_the_argument_error(self):
+        # Path.exists() re-raises every OSError except ENOENT and ENOTDIR, so a --out whose own name is
+        # longer than NAME_MAX - or one under a folder this user may not open - came out of argparse's
+        # type call as an OSError traceback with exit 1, the status this file keeps for a recording that
+        # started and then failed. The docstring promises exit 2 for a --out the run cannot use, before
+        # the TV is asked anything, and four interpreters (3.11 to 3.14) all answered the traceback.
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / ("a" * 300)
+            try:
+                os.stat(out)
+            except OSError:
+                pass
+            else:
+                self.skipTest("this filesystem stats a 300-character name")
+            err = self.parse_error(["nav", "--out", str(out)])
+            self.assertIn(str(out), err)
+            self.assertIn("cannot be looked at", err)
+            self.assertIn("nothing was recorded and the TV was not asked", err)
+            self.assertNotIn("Traceback", err)
+            # The same name one level up, the shape a reader reaches by appending a run's folder: the
+            # parent is judged before makedirs() is asked to create the child under it.
+            err = self.parse_error(["nav", "--out", str(out / "before")])
+            self.assertIn(str(out), err)
+            self.assertIn("cannot be looked at", err)
+            self.assertIn("File name too long", err)
+
     def test_a_folder_or_a_new_folder_is_still_accepted(self):
         with tempfile.TemporaryDirectory() as tmp:
             existing = Path(tmp) / "before"
@@ -172,6 +212,37 @@ class ArgumentTest(unittest.TestCase):
             self.assertEqual(caught.exception.code, 2)
             self.assertEqual(connects, [], "the TV was never opened")
             self.assertIn("is a file", err.getvalue())
+
+
+class OutLookedAtTest(unittest.TestCase):
+    """The four shapes a --out path is, without a filesystem that refuses one to hand.
+
+    A permission refusal and a device error take the same branch as the over-long name, and this is the
+    half that runs on a filesystem whose NAME_MAX is generous, or as a root user who may traverse
+    everything; the platform-shaped case next door needs the real refusal.
+    """
+
+    def test_a_path_that_is_not_there_is_the_new_folder_case(self):
+        # What Path.exists() answered False for before, so a --out a reader means as "make this" stays one.
+        for kind in (errno.ENOENT, errno.ENOTDIR, errno.ELOOP, errno.EBADF):
+            with self.subTest(errno=errno.errorcode[kind]), \
+                 mock.patch.object(os, "stat", side_effect=OSError(kind, os.strerror(kind))):
+                self.assertEqual(trace.looked_at(Path("/traces")), ("missing", None))
+
+    def test_any_other_refusal_keeps_the_reason_the_filesystem_gave(self):
+        for kind in (errno.ENAMETOOLONG, errno.EACCES, errno.EIO):
+            with self.subTest(errno=errno.errorcode[kind]), \
+                 mock.patch.object(os, "stat", side_effect=OSError(kind, os.strerror(kind))):
+                self.assertEqual(trace.looked_at(Path("/traces")), ("refused", os.strerror(kind)))
+
+    def test_a_folder_and_a_file_are_told_apart_by_the_mode(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            folder = Path(tmp) / "traces"
+            folder.mkdir()
+            self.assertEqual(trace.looked_at(folder), ("folder", None))
+            target = Path(tmp) / "traces.txt"
+            target.write_text("not a folder")
+            self.assertEqual(trace.looked_at(target), ("other", None))
 
 
 class ReachTest(unittest.TestCase):
@@ -297,10 +368,76 @@ class RecordTest(unittest.TestCase):
         self.assertIn(mock.call(2.0), sleep.call_args_list)
         self.assertIn(mock.call(1.5), sleep.call_args_list)
 
+    def test_formatted_sleeps_send_the_full_config_and_wait_on_the_host(self):
+        for steps in (["sleep  \t4"], ["sleep .5"] * 8,
+                      ["sleep '.5s' # wait"] * 8, ["sleep 4e0"]):
+            with self.subTest(steps=steps):
+                device = FakeDevice()
+                size, sleep = self.record(device, [], steps)
+                commands = [c[1] for c in device.calls if c[0] == "shell"]
+                start = next(c for c in commands if "| perfetto " in c)
+                encoded = re.search(r"echo (\S+) \| base64 -d", start).group(1)
+                self.assertEqual(base64.b64decode(encoded), CONFIG_9000)
+                self.assertFalse(any(step in commands for step in steps))
+                delay = 0.5 if len(steps) == 8 else 4.0
+                self.assertEqual(sleep.call_args_list,
+                                 [mock.call(3), *[mock.call(delay) for _ in steps], mock.call(2)])
+                self.assertEqual(size, len(b"trace"))
+
+    def test_nonliteral_and_compound_commands_are_forwarded_unchanged(self):
+        for command in ("echo 'sleep 99'", "sleep .5; echo done", "sleep $WAIT",
+                        "sleep", "sleep invalid", "sleep 'unterminated", "sleep inf",
+                        "sleep 1#note; echo done", "sleep\n1", "sleep 1 # comment\necho done"):
+            with self.subTest(command=command), mock.patch.object(trace.time, "sleep") as sleep:
+                remote = mock.Mock()
+                trace._run(remote, command)
+                remote.assert_called_once_with(command)
+                sleep.assert_not_called()
+
     def test_waits_on_the_pid_perfetto_reports(self):
         device = FakeDevice("1234\n")
         self.record(device, [], ["sleep 1"])
         self.assertIn(("shell", "[ -d /proc/1234 ] && echo running"), device.calls)
+
+    def test_a_recording_still_running_after_the_wait_is_not_pulled_or_published(self):
+        # Cover a reported PID and Android 9's pidof fallback, with and without an older local trace.
+        for started in ("1234\n", ""):
+            for existing in (False, True):
+                with self.subTest(pid=bool(started), existing=existing), tempfile.TemporaryDirectory() as tmp:
+                    device = FakeDevice(started)
+                    shell = device.shell
+
+                    def still_recording(command, read_timeout_s=None):
+                        answer = shell(command, read_timeout_s)
+                        return "running\n" if command.endswith("&& echo running") else answer
+
+                    device.shell = still_recording
+                    path = Path(tmp) / "nav-1.pftrace"
+                    if existing:
+                        path.write_bytes(b"previous complete recording")
+                    with mock.patch.object(trace.time, "sleep"), self.assertRaisesRegex(RuntimeError, "still running"):
+                        trace.record_one(device, [], ["sleep 1"], "com.gathin.tvhome", str(path))
+                    self.assertFalse(any(c[0] == "pull" for c in device.calls))
+                    self.assertNotIn(("shell", f"rm -f {trace.REMOTE}"), device.calls)
+                    if existing:
+                        self.assertEqual(path.read_bytes(), b"previous complete recording")
+                    else:
+                        self.assertFalse(path.exists())
+                    self.assertEqual(sorted(p.name for p in Path(tmp).iterdir()), [path.name] if existing else [])
+
+    def test_a_recording_that_finishes_on_the_last_poll_is_published(self):
+        device = FakeDevice()
+        shell = device.shell
+        answers = iter(["running\n"] * 59 + [""])
+
+        def finishing(command, read_timeout_s=None):
+            answer = shell(command, read_timeout_s)
+            return next(answers) if command.endswith("&& echo running") else answer
+
+        device.shell = finishing
+        size, _ = self.record(device, [], ["sleep 1"])
+        self.assertEqual(size, len(b"trace"))
+        self.assertEqual(sum(c[1].endswith("&& echo running") for c in device.calls if c[0] == "shell"), 60)
 
     def test_an_empty_trace_is_an_error_not_a_file(self):
         device = FakeDevice()
@@ -524,6 +661,21 @@ class RecordPreservationTest(unittest.TestCase):
                 self.assertEqual(output.getvalue(), "")
                 self.assertEqual(self.snapshot(path.parent), before)
 
+    def test_main_keeps_the_old_sidecar_when_writing_the_new_one_fails(self):
+        with self.files() as (path, before):
+            device = self.device()
+
+            def half(value, stream, **kwargs):
+                stream.write('{"scenario": "ho')
+                raise OSError(28, "No space left on device")
+
+            with self.main_modules(device), mock.patch.object(trace.time, "sleep"),                  mock.patch.object(trace.json, "dump", side_effect=half),                  contextlib.redirect_stdout(io.StringIO()), self.assertRaises(OSError):
+                self.main(path)
+            self.assertTrue(device.closed)
+            self.assertEqual(path.with_suffix(".json").read_bytes(), self.SIDECAR)
+            before[path.name] = hashlib.sha256(b"trace").hexdigest()
+            self.assertEqual(self.snapshot(path.parent), before)
+
     def test_main_writes_metadata_after_successful_replacement_and_reports_size(self):
         with self.files() as (path, before):
             device = self.device()
@@ -547,6 +699,39 @@ class RecordPreservationTest(unittest.TestCase):
             before[path.name] = hashlib.sha256(b"trace").hexdigest()
             before[sidecar.name] = hashlib.sha256(sidecar.read_bytes()).hexdigest()
             self.assertEqual(self.snapshot(path.parent), before)
+
+
+    def test_a_folder_name_the_console_cannot_encode_is_printed_with_replacement_characters(self):
+        """docs/workflows/perf-ab.md has a reader compare `traces/before` with `traces/after`.
+
+        Named in the reader's own language - `trước` and `sau` - those folders are what the last two lines
+        of a run print, and the name went to stdout as it is: a cp1252 window, which is what a Windows
+        console hands a script that does not ask for UTF-8, raised UnicodeEncodeError after every trace had
+        been recorded and pulled. The exit status was 1, the one this file keeps for a recording that
+        failed, while the trace and its sidecar sat on disk.
+        """
+        device = self.device()
+        with tempfile.TemporaryDirectory() as tmp, self.main_modules(device), \
+             mock.patch.object(trace.time, "sleep"):
+            folder = Path(tmp) / "đô-trước"
+            folder.mkdir()
+            path = folder / "home-1.pftrace"
+            raw = io.BytesIO()
+            console = io.TextIOWrapper(raw, encoding="cp1252", newline="")
+            real = sys.stdout
+            self.addCleanup(setattr, sys, "stdout", real)
+            sys.stdout = console
+            try:
+                self.assertIsNone(self.main(path))
+            finally:
+                console.flush()
+                sys.stdout = real
+            self.assertTrue(path.exists(), "the trace was recorded before its name was printed")
+        printed = raw.getvalue().decode("cp1252")
+        expected = str(path).encode("cp1252", "replace").decode("cp1252")
+        self.assertIn(f"{expected}: {len(b'trace')} bytes", printed)
+        where = str(folder).encode("cp1252", "replace").decode("cp1252")
+        self.assertIn(f"trace_report.py {where}   (see tools/trace.md)", printed)
 
 
 class OtherAppTest(unittest.TestCase):

@@ -1,3 +1,12 @@
+# 0.2.11 PiTV release
+
+Prepared November 20, 2026.
+
+- Proposes the reviewed CleanYourTV v3.6.0 snapshot at `f63a1ebcdcd63aae1ec1b6f62aa4d2a6858c116b`. Review the catalog, tool changes, profile notes and TV safety before merging.
+- No new automatic TV cleanup recipe is approved by this proposal.
+
+---
+
 # 0.2.10 PiTV release
 
 Prepared November 8, 2026.

@@ -323,6 +323,10 @@ class GeneratorTest(unittest.TestCase):
                  (tv("X", "X", colour="red"), "unknown key"),
                  (tv("X", "X", notes="a | b"), "split the table cell"),
                  (tv("X\n", "X"), "one line"),
+                 # A bare CR is a line ending to a Markdown reader, and the tables are read back with
+                 # universal newlines, so it comes back as the LF a re-run compares against: refused,
+                 # rather than written into a row `--check` never agrees with (the test below).
+                 (tv("X\rGoogle TV", "X"), "one line"),
                  (tv("X", "X", notes="[note](../docs/devices/none.md)"), "leads nowhere"),
                  # Not a string: refused by name, where the link check used to end in a TypeError (exit 1).
                  (tv("X", "X", notes=["a", "b"]), '"notes" must be'),
@@ -336,10 +340,82 @@ class GeneratorTest(unittest.TestCase):
                 self.assertIn(message, str(caught.exception))
                 self.assertEqual(run(root, "--check")[0], 2)
 
+    def test_a_carriage_return_is_refused_instead_of_written_and_never_agreed_with(self):
+        """A cell with a bare CR is not one line, and a run that wrote it would never agree with itself.
+
+        The tables are read back with universal newlines, so the CR comes back as the LF the re-render
+        compares against: `gen_tables.py` wrote the row, `--check` answered "out of date" from then on,
+        and no run could clear it - the "README tables" job red on a row that looks right. Refusing the
+        value at load means the tables are never written, so a contributor sees the line they can fix.
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            root = tree(tmp, [("x-1", tv("X\rGoogle TV", "X"))])
+            before = (root / "README.md").read_text(encoding="utf-8")
+            self.assertEqual(run(root)[0], 2)
+            self.assertEqual((root / "README.md").read_text(encoding="utf-8"), before)
+
     def test_an_escaped_pipe_and_a_working_link_are_fine(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = tree(tmp, [("x-1", tv("X", "X", notes="a \\| b, [list](x-1/debloat.txt), [web](https://x.y)"))])
             self.assertEqual(len(gen_tables.load(root)), 1)
+
+    def test_encoded_local_links_resolve_without_rewriting_the_destination(self):
+        cases = [("note.md", "note.md"), ("unit notes.md", "unit%20notes.md"),
+                 ("电视.md", "%E7%94%B5%E8%A7%86.md"), ("note#.md", "note%23.md#details"),
+                 ("unit%20notes.md", "unit%2520notes.md"), ("note+.md", "note+.md")]
+        for key in ("tv", "notes"):
+            for filename, destination in cases:
+                with self.subTest(key=key, destination=destination), tempfile.TemporaryDirectory() as tmp:
+                    target = f"x-1/{destination}"
+                    data = tv("X", "X")
+                    data[key] = f"X [note]({target})"
+                    root = tree(tmp, [("x-1", data)])
+                    (root / "examples/x-1" / filename).write_text("# Details\n", encoding="utf-8")
+                    code, output = run(root)
+                    self.assertEqual(code, 0, output)
+                    self.assertIn(f"]({target})", (root / "examples/README.md").read_text(encoding="utf-8"))
+                    self.assertEqual(run(root, "--check")[0], 0)
+                    self.assertEqual(json.loads((root / "examples/x-1/tv.json").read_text()), data)
+
+    def test_an_encoded_link_is_refused_when_only_its_literal_spelling_exists(self):
+        for key in ("tv", "notes"):
+            with self.subTest(key=key), tempfile.TemporaryDirectory() as tmp:
+                target = "x-1/unit%20notes.md"
+                data = tv("X", "X")
+                data[key] = f"X [note]({target})"
+                root = tree(tmp, [("x-1", data)])
+                (root / "examples" / target).write_text("Not the URL's decoded target.\n", encoding="utf-8")
+                pages = [root / "README.md", root / "examples/README.md", root / "tools/readme_stats.py"]
+                before = [p.read_bytes() for p in pages]
+                code, output = run(root)
+                self.assertEqual(code, 2)
+                self.assertIn(target, output)
+                self.assertEqual([p.read_bytes() for p in pages], before)
+
+    def test_external_link_scheme_case_does_not_make_tv_json_invalid(self):
+        for key in ("tv", "notes"):
+            for target in ("http://example.invalid/Model", "HTTP://example.invalid/Model",
+                           "hTtPs://example.invalid/Model", "MAILTO:reader@example.invalid"):
+                with self.subTest(key=key, target=target), tempfile.TemporaryDirectory() as tmp:
+                    data = tv("X", "X")
+                    data[key] = f"X [reference]({target})"
+                    root = tree(tmp, [("x-1", data)])
+                    code, output = run(root)
+                    self.assertEqual(code, 0, output)
+                    self.assertIn(f"]({target})", (root / "examples/README.md").read_text(encoding="utf-8"))
+                    self.assertEqual(run(root, "--check")[0], 0)
+                    self.assertEqual(json.loads((root / "examples/x-1/tv.json").read_text()), data)
+
+    def test_an_external_link_does_not_hide_a_missing_relative_link(self):
+        target = "HTTPS://example.invalid/Model"
+        with tempfile.TemporaryDirectory() as tmp:
+            root = tree(tmp, [("x-1", tv("X", "X", notes=f"[web]({target}), [note](x-1/missing.md)"))])
+            before = (root / "README.md").read_bytes()
+            code, output = run(root)
+            self.assertEqual(code, 2)
+            self.assertIn("x-1/missing.md", output)
+            self.assertNotIn(target, output)
+            self.assertEqual((root / "README.md").read_bytes(), before)
 
     def test_markers_must_be_there_once(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -355,8 +431,10 @@ class FontTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             (Path(tmp) / "repo").mkdir()
             root = tree(Path(tmp) / "repo", [("tcl-a", tv("TCL A", "TCL"))])
-            # The real script, whose counts this tree changes, so --font hands it the font.
+            # The real script, whose counts this tree changes, so --font hands it the font. It publishes
+            # through tools/picture_file.py, imported from beside it.
             shutil.copy(ROOT / "tools" / "readme_stats.py", root / "tools" / "readme_stats.py")
+            shutil.copy(ROOT / "tools" / "picture_file.py", root / "tools" / "picture_file.py")
             # A checkout has docs/, where the picture goes: the script names the folder it cannot find.
             (root / "docs").mkdir()
             caller = Path(tmp) / "caller"
