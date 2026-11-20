@@ -21,8 +21,10 @@ the check, and the engine is replaced by a mock, so what these tests read is the
 Run from the repository root: python3 -m unittest discover -s tests -v
 """
 import contextlib
+import errno
 import importlib.util
 import io
+import os
 from pathlib import Path
 import sys
 import tempfile
@@ -64,6 +66,54 @@ class TracePathTest(unittest.TestCase):
         path = self.folder / name
         path.write_bytes(b"")
         return str(path)
+
+    def test_a_folder_read_error_is_named_before_the_engine_starts(self):
+        folder = self.folder / "unreadable"
+        folder.mkdir()
+        for number in (errno.EACCES, errno.EIO):
+            with self.subTest(errno=number), \
+                    mock.patch.object(trace_report.os, "scandir",
+                                      side_effect=OSError(number, os.strerror(number), str(folder))):
+                code, _, opener = self.run_main([str(folder), "--out", self.out])
+                self.assertIn(str(folder), code)
+                self.assertIn(os.strerror(number), code)
+                opener.assert_not_called()
+                self.assertFalse(Path(self.out).exists())
+
+    def test_output_cannot_replace_a_trace_by_path_or_link(self):
+        for kind in ("direct", "symlink", "hardlink"):
+            with self.subTest(kind=kind):
+                source = Path(self.trace("input-" + kind + ".pftrace"))
+                source.write_bytes(b"keep this trace")
+                output = self.folder / (kind + ".png")
+                if kind == "direct":
+                    source.rename(output)
+                    source = output
+                else:
+                    try:
+                        (os.symlink if kind == "symlink" else os.link)(source, output)
+                    except (OSError, NotImplementedError):
+                        continue  # the direct path control still runs without link support
+                with mock.patch.object(trace_report, "opener") as opener, \
+                        contextlib.redirect_stderr(io.StringIO()):
+                    self.assertEqual(flamechart.main([str(source), "--out", str(output)]), 2)
+                opener.assert_not_called()
+                self.assertEqual(source.read_bytes(), b"keep this trace")
+
+    def test_output_alias_of_any_folder_run_is_refused_before_median_selection(self):
+        source = Path(self.trace("nav-1.pftrace"))
+        source.write_bytes(b"keep the unselected run too")
+        self.trace("nav-2.pftrace")
+        output = self.folder / "chart.png"
+        try:
+            os.link(source, output)
+        except (OSError, NotImplementedError):
+            self.skipTest("hardlinks are not available here")
+        with mock.patch.object(trace_report, "opener") as opener, \
+                contextlib.redirect_stderr(io.StringIO()):
+            self.assertEqual(flamechart.main([str(self.folder), "--out", str(output)]), 2)
+        opener.assert_not_called()
+        self.assertEqual(source.read_bytes(), b"keep the unselected run too")
 
     def test_a_path_that_is_not_a_file_is_named_before_the_engine_starts(self):
         missing = str(self.folder / "nav-1.pftrace")

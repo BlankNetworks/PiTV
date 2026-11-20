@@ -2,7 +2,8 @@
 
 **When to use this:** a widget or tile that can be its own small app, shown through a module card.
 
-1. Create `addons/<name>/` as its own Gradle project (`settings.gradle`, its own `gradlew` and `gradlew.bat`
+1. Create `addons/<name>/` as its own Gradle project (`settings.gradle`, or `settings.gradle.kts` as
+   `addons/tv-hub` ships it - `tests/test_addons.py` accepts either - its own `gradlew` and `gradlew.bat`
    wrappers and an `app` module), with its own package name. Copy the two wrappers from an add-on that is
    already here: the add-on build names `./gradlew` on macOS and Linux and `gradlew.bat` in a Command Prompt,
    and `tests/test_addons.py` refuses a folder without either one.
@@ -26,4 +27,8 @@
 7. No APKs in the repo. `tests/test_addons.py` checks all of this; `.github/workflows/addons.yml` builds the
    add-ons that changed with `./gradlew --no-daemon assembleRelease`.
 
-Then run the tests: `python3 -m unittest discover -s tests -v`.
+Then run the tests with the checkout's venv: `tools/venv/bin/python -m unittest discover -s tests -v`.
+[`README.md`'s by-hand block](../../README.md) builds it, and it is where `tools/requirements.txt` puts the
+`adb_shell` the suite imports - under the system `python3` those checks skip and the run still says OK. The
+picture, card and wallpaper checks need Pillow as well: `tools/requirements-perf.txt` adds it, and without it
+they are reported as skips, not failures.

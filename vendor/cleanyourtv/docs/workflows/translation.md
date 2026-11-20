@@ -4,7 +4,11 @@
 
 1. Create `launcher/app/src/main/res/values-<qualifier>/strings.xml` and translate every string in
    `launcher/app/src/main/res/values/strings.xml`, skipping the ones marked `translatable="false"`. Keep
-   placeholders (`%1$s`, `%d`) and XML escapes intact. The folder suffix is the qualifier Android reads:
+   placeholders (`%1$s`, `%d`) and XML escapes intact: `tests/test_string_format_arguments.py` reads every
+   locale string against the English one, and a specifier that moved or changed letter
+   (`%1$d` written `%1$s` for a count) is an `IllegalFormatConversionException` on the line that draws the
+   row, on a TV set to that language and nowhere else - the row never appears and the build stays green.
+   The folder suffix is the qualifier Android reads:
    `de` for a language, `zh-rCN` for a language with a region, or the BCP-47 form the tree also uses,
    `b+sr+Latn`, for a language with a script (`values-sr-Latn` is not a folder it reads).
 2. A language may also need one of the other files `values/` carries. Add it only when `values/` has the
@@ -28,7 +32,11 @@
    in this test's table". Step 3's `locales_config.xml` entry does not satisfy it.
 5. To fix a missing string in existing locales, add it to every `values-*` folder you can, in the same order as
    the default `strings.xml`. A missing string falls back to English (`launcher/app/lint.xml`), but a new switch
-   needs its strings in every locale.
+   needs its strings in every locale. The other direction counts too: a string you rename or delete in
+   `launcher/app/src/main/res/values/strings.xml` has to be renamed or deleted in every locale along with
+   it, because a name the default no longer has is read by nothing -
+   `tests/test_string_format_arguments.py` names it once per folder, so renaming one key reds all thirty
+   locales rather than one.
 6. Moving hard-coded text into resources is welcome; do not bundle unrelated build changes with it.
 7. Check the size gate before you push. A language's strings ship in the release APK, and that APK has to
    stay under 589,824 B (576 KB): `launcher/app/build/outputs/apk/release/app-release.apk`, measured with
@@ -39,14 +47,24 @@
 8. Build the launcher, set the TV's language (Android 13+: `tools/tv.py 'cmd locale set-app-locales com.gathin.tvhome --locales <tag>'`)
    and attach a screenshot. Right-to-left languages mirror the layout like Hebrew; `tests/test_hebrew_resources.py`
    checks that `layout-iw` keeps every view.
-9. The language count moves with the folder. `README.md`, `README.nl.md`, `README.de.md`, `README.uk.md` and
-   `README.tr.md` state it in the card's alt text and in the `| **N languages** |` row, and
-   `tools/readme_stats.py`'s `STATS` carries it for the pictures, so a language added without them leaves
-   those pages and the card claiming the old number.
+9. The language count moves with the folder. Five front pages state it in the card's alt text and in the
+   `| **N languages** |` row - `README.md`, `README.nl.md`, `README.de.md`, `README.uk.md` and
+   `README.tr.md` - and `tools/readme_stats.py`'s `STATS` carries it for the pictures, so a language added
+   without them leaves those pages and the card claiming the old number. Five more state it in that row
+   alone, in digits: `README.he.md`, `README.pt-BR.md`, `README.uz.md`, `README.fr.md` and `README.es.md`. None of the five carries the
+   generated brand block or the card, so `tools/gen_tables.py` does not write them at all, and nothing else
+   read them: a language added without moving those rows left the Hebrew and Portuguese front pages
+   offering one fewer language than the launcher ships, with the suite green, and the Uzbek page - whose row
+   says `til`, not the Turkish `dil` that check already knew - was outside the check too.
+   `tests/test_readme_language_count.py` reads the row on all ten.
    `tests/test_gen_tables_translated_counts.py` fails on the translated page in the meantime ('355 tv-modellen ·
    97 merken · 30 talen · ' != '… 29 talen · '). Run `python3 tools/gen_tables.py` after adding the folder: it
    moves the number in the pages it writes and in `STATS`, prints that `docs/stats.png` and `docs/card.jpg` have
    to be redrawn with the font (`--font Fredoka.ttf`), and its `--check` - what CI's "README tables" job runs -
    exits 1 until they agree.
 
-Then run the tests: `python3 -m unittest discover -s tests -v`.
+Then run the tests with the checkout's venv: `tools/venv/bin/python -m unittest discover -s tests -v`.
+[`README.md`'s by-hand block](../../README.md) builds it, and it is where `tools/requirements.txt` puts the
+`adb_shell` the suite imports - under the system `python3` those checks skip and the run still says OK. The
+picture, card and wallpaper checks need Pillow as well: `tools/requirements-perf.txt` adds it, and without it
+they are reported as skips, not failures.
